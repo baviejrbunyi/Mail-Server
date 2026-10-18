@@ -95,10 +95,16 @@ export default function DocumentationPage() {
   -H "Content-Type: application/json" \\
   -d '{
     "to": "customer@example.com",
-    "from": "notifications@yourdomain.com",
+    "from": "yourname@gmail.com",
     "subject": "Order Confirmation #84920",
     "html": "<h1>Thank you for your order!</h1><p>Your package is being prepared.</p>",
-    "text": "Thank you for your order! Your package is being prepared."
+    "text": "Thank you for your order! Your package is being prepared.",
+    "smtp": {
+      "host": "smtp.gmail.com",
+      "port": 465,
+      "user": "yourname@gmail.com",
+      "pass": "your-16-char-app-password"
+    }
   }'`,
     node: `// Node.js (Node 18+ native fetch or axios)
 async function sendEmail() {
@@ -110,10 +116,16 @@ async function sendEmail() {
     },
     body: JSON.stringify({
       to: "customer@example.com",
-      from: "notifications@yourdomain.com",
+      from: "yourname@gmail.com",
       subject: "Welcome to Acme Corp!",
       html: "<h2>Welcome aboard</h2><p>Click below to verify your email.</p>",
-      text: "Welcome aboard. Please verify your email."
+      text: "Welcome aboard. Please verify your email.",
+      smtp: {
+        host: "smtp.gmail.com",
+        port: 465,
+        user: "yourname@gmail.com",
+        pass: "your-16-char-app-password"
+      }
     })
   });
 
@@ -143,9 +155,16 @@ export async function sendWelcomeEmail(userEmail: string, userName: string) {
     },
     body: JSON.stringify({
       to: userEmail,
+      from: process.env.SMTP_USER, // e.g. "you@gmail.com"
       subject: \`Welcome to our platform, \${userName}!\`,
       html: \`<p>Hello \${userName},</p><p>We are thrilled to have you join us.</p>\`,
-      text: \`Hello \${userName}, we are thrilled to have you join us.\`
+      text: \`Hello \${userName}, we are thrilled to have you join us.\`,
+      smtp: {
+        host: process.env.SMTP_HOST || "smtp.gmail.com",
+        port: 465,
+        user: process.env.SMTP_USER, // your email
+        pass: process.env.SMTP_PASS, // your 16-character App Password
+      }
     }),
     cache: "no-store",
   });
@@ -157,7 +176,7 @@ export async function sendWelcomeEmail(userEmail: string, userName: string) {
 
   const { id, status } = await res.json();
   return { success: true, messageId: id, status };
-}`,
+} `,
     python: `# Python 3.8+ (using requests or httpx)
 import requests
 
@@ -171,10 +190,16 @@ def send_transactional_email(to_email: str, subject: str, message_body: str):
     }
     payload = {
         "to": to_email,
-        "from": "alerts@yourdomain.com",
+        "from": "yourname@gmail.com",
         "subject": subject,
         "html": f"<p>{message_body}</p>",
-        "text": message_body
+        "text": message_body,
+        "smtp": {
+            "host": "smtp.gmail.com",
+            "port": 465,
+            "user": "yourname@gmail.com",
+            "pass": "your-16-char-app-password"
+        }
     }
 
     response = requests.post(MAIL_SERVER_URL, json=payload, headers=headers, timeout=10)
@@ -197,19 +222,34 @@ import (
 	"time"
 )
 
+type SMTPConfig struct {
+	Host string \`json:"host"\`
+	Port int    \`json:"port"\`
+	User string \`json:"user"\`
+	Pass string \`json:"pass"\`
+}
+
 type EmailPayload struct {
-	To      string \`json:"to"\`
-	From    string \`json:"from,omitempty"\`
-	Subject string \`json:"subject"\`
-	HTML    string \`json:"html,omitempty"\`
-	Text    string \`json:"text,omitempty"\`
+	To      string     \`json:"to"\`
+	From    string     \`json:"from"\`
+	Subject string     \`json:"subject"\`
+	HTML    string     \`json:"html,omitempty"\`
+	Text    string     \`json:"text,omitempty"\`
+	SMTP    SMTPConfig \`json:"smtp"\`
 }
 
 func main() {
 	payload := EmailPayload{
 		To:      "customer@example.com",
+		From:    "yourname@gmail.com",
 		Subject: "Your Monthly Report",
 		Text:    "Your monthly usage report is now available.",
+		SMTP: SMTPConfig{
+			Host: "smtp.gmail.com",
+			Port: 465,
+			User: "yourname@gmail.com",
+			Pass: "your-16-char-app-password",
+		},
 	}
 	body, _ := json.Marshal(payload)
 
@@ -233,9 +273,16 @@ $endpoint = "${baseUrl}/api/v1/send";
 
 $payload = [
     "to" => "user@example.com",
+    "from" => "yourname@gmail.com",
     "subject" => "Password Reset Request",
     "html" => "<p>Click <a href='https://example.com/reset'>here</a> to reset your password.</p>",
-    "text" => "Go to https://example.com/reset to reset your password."
+    "text" => "Go to https://example.com/reset to reset your password.",
+    "smtp" => [
+        "host" => "smtp.gmail.com",
+        "port" => 465,
+        "user" => "yourname@gmail.com",
+        "pass" => "your-16-char-app-password"
+    ]
 ];
 
 $ch = curl_init($endpoint);
@@ -267,7 +314,9 @@ echo "Response: $response\\n";
 
   const projectEnvExample = `# In your own application's .env or .env.local:
 MAIL_SERVER_URL=${baseUrl}
-MAIL_SERVER_API_KEY=ak_live_YOUR_GENERATED_KEY_HERE`;
+MAIL_SERVER_API_KEY=ak_live_YOUR_GENERATED_KEY_HERE
+SMTP_USER=yourname@gmail.com
+SMTP_PASS=your-16-char-app-password`;
 
   const sections = [
     { id: "overview", label: "Using This Mail Server" },
@@ -544,7 +593,7 @@ MAIL_SERVER_API_KEY=ak_live_YOUR_GENERATED_KEY_HERE`;
               </h3>
 
               <p className="text-xs text-slate-400 leading-relaxed">
-                Dispatch a POST request to <code className="px-1.5 py-0.5 rounded text-xs font-mono bg-slate-950 border border-slate-800 text-sky-300">{baseUrl}/api/v1/send</code> with your authorization header:
+                Dispatch a POST request to <code className="px-1.5 py-0.5 rounded text-xs font-mono bg-slate-950 border border-slate-800 text-sky-300">{baseUrl}/api/v1/send</code> with your authorization header and your personal SMTP credentials (e.g. Gmail App Password):
               </p>
 
               <CodeEditor
@@ -553,9 +602,16 @@ MAIL_SERVER_API_KEY=ak_live_YOUR_GENERATED_KEY_HERE`;
   -H "Content-Type: application/json" \\
   -d '{
     "to": "recipient@example.com",
+    "from": "yourname@gmail.com",
     "subject": "Hello from my app!",
     "html": "<h1>It works!</h1><p>Sent via the serverless email API.</p>",
-    "text": "It works! Sent via the serverless email API."
+    "text": "It works! Sent via the serverless email API.",
+    "smtp": {
+      "host": "smtp.gmail.com",
+      "port": 465,
+      "user": "yourname@gmail.com",
+      "pass": "your-16-char-app-password"
+    }
   }'`}
                 language="curl"
                 filename="Quickstart cURL"
@@ -823,9 +879,13 @@ MAIL_SERVER_API_KEY=ak_live_YOUR_GENERATED_KEY_HERE`;
                     <span className="font-mono text-sky-300 font-semibold">text</span> <span className="text-slate-400">(optional)</span>
                     <p className="text-slate-400 mt-1">Plaintext fallback representation.</p>
                   </div>
+                  <div className="bg-slate-950 p-3 rounded-lg border border-amber-500/30 md:col-span-2">
+                    <span className="font-mono text-amber-400 font-semibold">smtp</span> <span className="text-rose-400 font-semibold">(required — BYOS)</span>
+                    <p className="text-slate-400 mt-1">Object containing caller&apos;s SMTP relay credentials: <code className="text-sky-300">user</code> (required, e.g. your Gmail), <code className="text-sky-300">pass</code> (required, 16-char App Password), <code className="text-sky-300">host</code> (default: &quot;smtp.gmail.com&quot; for Gmail), <code className="text-sky-300">port</code> (default: 465 SSL).</p>
+                  </div>
                   <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
                     <span className="font-mono text-sky-300 font-semibold">from</span> <span className="text-slate-400">(optional)</span>
-                    <p className="text-slate-400 mt-1">Custom sender name/email (e.g. &quot;Acme Alerts &lt;alerts@acme.com&gt;&quot;). Defaults to server default.</p>
+                    <p className="text-slate-400 mt-1">Custom sender address or display name (e.g. &quot;Acme Alerts &lt;user@gmail.com&gt;&quot;). Defaults to smtp.user.</p>
                   </div>
                   <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
                     <span className="font-mono text-sky-300 font-semibold">replyTo</span> <span className="text-slate-400">(optional)</span>
@@ -1195,10 +1255,10 @@ const payload = {
             <div className="space-y-4 text-xs">
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-2">
                 <h4 className="font-semibold text-slate-200 text-sm">
-                  Do I need to set up my own Supabase, QStash, or SMTP accounts?
+                  Do I need to set up my own Supabase database or QStash queues?
                 </h4>
                 <p className="text-slate-400 leading-relaxed">
-                  <strong>No!</strong> That is the primary advantage of this service. The mail server already has Supabase persistence, Upstash QStash queueing, and SMTP relay configured. All you need to do is generate an API key from our <Link href="/dashboard" className="text-amber-400 hover:underline">Console</Link> and pass it in the <code className="px-1.5 py-0.5 rounded text-xs font-mono bg-slate-950 border border-slate-800 text-purple-300">Authorization: Bearer ak_live_...</code> header.
+                  <strong>No!</strong> The mail server fully manages database persistence, asynchronous message queueing, automatic retries with exponential backoff, and delivery audit logs for you. However, for email transmission, this service operates on a <strong>Bring Your Own SMTP (BYOS)</strong> model: you provide your own SMTP credentials (such as your Gmail address and 16-character App Password, or an Amazon SES / Postmark relay) in the request payload. There are no server-side default SMTP credentials, ensuring your emails are sent strictly from your verified identity without shared IP reputation risk.
                 </p>
               </div>
 

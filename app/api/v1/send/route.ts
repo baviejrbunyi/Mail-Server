@@ -59,11 +59,15 @@ function validateEmailPayload(body: any): { isValid: boolean; error?: string; da
     }
   }
 
-  // 2. Validate 'from'
-  if (!body.from || typeof body.from !== "string") {
-    return { isValid: false, error: "Missing required field: 'from' sender email address." };
+  // 2. Validate 'from' (or fallback to body.smtp?.user)
+  const rawFrom = (typeof body.from === "string" && body.from.trim()) 
+    ? body.from.trim() 
+    : (body.smtp && typeof body.smtp.user === "string" && body.smtp.user.trim() ? body.smtp.user.trim() : "");
+
+  if (!rawFrom) {
+    return { isValid: false, error: "Missing required sender email: provide 'from' or 'smtp.user'." };
   }
-  const sender = body.from.trim();
+  const sender = rawFrom;
   if (!EMAIL_REGEX.test(sender)) {
     return { isValid: false, error: `Invalid sender email format: "${sender}"` };
   }
@@ -97,17 +101,51 @@ function validateEmailPayload(body: any): { isValid: boolean; error?: string; da
     }
   }
 
-  // 6. Optional custom SMTP config
-  let customSmtp: CustomSmtpConfig | undefined = undefined;
-  if (body.smtp && typeof body.smtp === "object") {
-    customSmtp = {
-      host: body.smtp.host ? String(body.smtp.host).trim() : undefined,
-      port: body.smtp.port ? Number(body.smtp.port) : undefined,
-      secure: typeof body.smtp.secure === "boolean" ? body.smtp.secure : undefined,
-      user: body.smtp.user ? String(body.smtp.user).trim() : undefined,
-      pass: body.smtp.pass ? String(body.smtp.pass).trim() : undefined,
+  // 6. Mandatory User-Provided SMTP Config (Bring Your Own SMTP)
+  if (!body.smtp || typeof body.smtp !== "object") {
+    return {
+      isValid: false,
+      error: "Missing required 'smtp' configuration. This mail server requires callers to provide their own SMTP credentials (e.g. your Gmail address and 16-character App Password, or an Amazon SES/Postmark relay). See /docs#gmail-guide for setup instructions."
     };
   }
+
+  const smtpUser = body.smtp.user ? String(body.smtp.user).trim() : "";
+  const smtpPass = body.smtp.pass ? String(body.smtp.pass).trim() : "";
+
+  if (!smtpUser) {
+    return {
+      isValid: false,
+      error: "Missing required field: 'smtp.user' (your email address or SMTP username)."
+    };
+  }
+
+  if (!smtpPass) {
+    return {
+      isValid: false,
+      error: "Missing required field: 'smtp.pass' (your SMTP password or 16-character Google App Password)."
+    };
+  }
+
+  const isGmail = smtpUser.endsWith("@gmail.com") || smtpUser.endsWith("@googlemail.com");
+  const smtpHost = body.smtp.host ? String(body.smtp.host).trim() : (isGmail ? "smtp.gmail.com" : "");
+
+  if (!smtpHost) {
+    return {
+      isValid: false,
+      error: "Missing required field: 'smtp.host' (e.g. 'smtp.gmail.com' or 'email-smtp.us-east-1.amazonaws.com')."
+    };
+  }
+
+  const smtpPort = body.smtp.port ? Number(body.smtp.port) : 465;
+  const smtpSecure = typeof body.smtp.secure === "boolean" ? body.smtp.secure : (smtpPort === 465);
+
+  const customSmtp: CustomSmtpConfig = {
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpSecure,
+    user: smtpUser,
+    pass: smtpPass,
+  };
 
   return {
     isValid: true,

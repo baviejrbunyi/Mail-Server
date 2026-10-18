@@ -29,64 +29,66 @@ export async function deliverEmail(
   }
 ): Promise<DeliverEmailResult> {
   const customSmtp = payload.smtp;
-  const smtpHost = customSmtp?.host || process.env.SMTP_HOST || "smtp.gmail.com";
-  const smtpPort = customSmtp?.port ? Number(customSmtp.port) : (process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465);
-  const smtpUser = customSmtp?.user || process.env.SMTP_USER;
-  const smtpPass = customSmtp?.pass || process.env.SMTP_PASSWORD;
-  const smtpSecure = customSmtp?.secure !== undefined ? customSmtp.secure : (smtpPort === 465);
+  if (!customSmtp || !customSmtp.user || !customSmtp.pass) {
+    const errorMsg = "Missing required SMTP credentials. Every dispatch must include 'smtp.user' and 'smtp.pass' (e.g. Gmail address and 16-character App Password, or custom relay credentials).";
+    console.error(`[SMTP ERROR] Message ${messageId} aborted:`, errorMsg);
+    return { success: false, messageId, error: errorMsg };
+  }
 
-  const isSmtpConfigured = Boolean(
-    smtpUser &&
-    !smtpUser.includes("yourdomain") &&
-    smtpPass &&
-    !smtpPass.includes("your-")
-  );
+  const smtpUser = customSmtp.user.trim();
+  const smtpPass = customSmtp.pass.trim();
+  const isGmailUser = smtpUser.endsWith("@gmail.com") || smtpUser.endsWith("@googlemail.com");
+  const smtpHost = customSmtp.host ? customSmtp.host.trim() : (isGmailUser ? "smtp.gmail.com" : "");
+
+  if (!smtpHost) {
+    const errorMsg = "Missing required 'smtp.host' (e.g. 'smtp.gmail.com' or 'email-smtp.us-east-1.amazonaws.com').";
+    console.error(`[SMTP ERROR] Message ${messageId} aborted:`, errorMsg);
+    return { success: false, messageId, error: errorMsg };
+  }
+
+  const smtpPort = customSmtp.port ? Number(customSmtp.port) : 465;
+  const smtpSecure = customSmtp.secure !== undefined ? customSmtp.secure : (smtpPort === 465);
 
   const recipientArray = Array.isArray(payload.to) ? payload.to : [payload.to];
   const now = new Date().toISOString();
 
   try {
-    if (isSmtpConfigured) {
-      // 1. Configure real Nodemailer transporter with resolved SMTP credentials
-      const transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort,
-        secure: smtpSecure,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-      });
+    // 1. Configure Nodemailer transporter with caller's SMTP credentials
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+    });
 
-      // 2. Transmit email via SMTP
-      // If using Gmail SMTP and payload.from is dummy or differing, ensure from matches authenticated user to satisfy Gmail anti-spoofing policy
-      const isGmail = smtpHost.includes("gmail.com") || (smtpUser && smtpUser.includes("@gmail.com"));
-      let senderAddress = payload.from || smtpUser;
-      let replyToAddress: string | undefined = undefined;
+    // 2. Transmit email via SMTP
+    // If using Gmail SMTP and payload.from is dummy or differing, ensure from matches authenticated user to satisfy Gmail anti-spoofing policy
+    const isGmail = smtpHost.includes("gmail.com") || smtpUser.includes("@gmail.com");
+    let senderAddress = payload.from || smtpUser;
+    let replyToAddress: string | undefined = undefined;
 
-      if (isGmail && smtpUser) {
-        if (!payload.from || payload.from.includes("yourdomain.com")) {
-          senderAddress = smtpUser;
-        } else if (!payload.from.includes(smtpUser)) {
-          // Gmail allows display name with authenticated address, e.g. "My App <user@gmail.com>"
-          replyToAddress = payload.from;
-        }
+    if (isGmail) {
+      if (!payload.from || payload.from.includes("yourdomain.com")) {
+        senderAddress = smtpUser;
+      } else if (!payload.from.includes(smtpUser)) {
+        replyToAddress = payload.from;
       }
-
-      await transporter.sendMail({
-        from: senderAddress,
-        to: recipientArray,
-        subject: payload.subject,
-        text: payload.text,
-        html: payload.html,
-        attachments: payload.attachments,
-        replyTo: replyToAddress,
-      });
-
-      console.log(`[SMTP] Successfully sent email ${messageId} to ${recipientArray.join(", ")} via ${smtpHost}`);
-    } else {
-      console.log(`[SIMULATED SMTP] Delivered email ${messageId} to ${recipientArray.join(", ")} (SMTP credentials not yet configured)`);
     }
+
+    await transporter.sendMail({
+      from: senderAddress,
+      to: recipientArray,
+      subject: payload.subject,
+      text: payload.text,
+      html: payload.html,
+      attachments: payload.attachments,
+      replyTo: replyToAddress,
+    });
+
+    console.log(`[SMTP] Successfully sent email ${messageId} to ${recipientArray.join(", ")} via ${smtpHost}`);
 
     // 3. Update Supabase status to 'sent'
     try {

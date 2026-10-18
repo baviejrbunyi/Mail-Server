@@ -16,7 +16,8 @@ import {
   User, 
   ArrowLeft,
   Sparkles,
-  BookOpen
+  BookOpen,
+  Mail
 } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -314,43 +315,41 @@ export default function DashboardPage() {
       return;
     }
 
+    if (!customSmtpUser.trim() || !customSmtpPass.trim()) {
+      showToast("Please provide your SMTP Username and Password (e.g. Gmail App Password).", "error");
+      return;
+    }
+
     setIsSending(true);
     setSendResponse(null);
 
     try {
       const payloadToSend: any = {
         to: toEmail,
-        from: fromEmail,
+        from: fromEmail || customSmtpUser.trim(),
         subject,
         text: textBody,
         html: htmlBody,
+        smtp: {
+          host: customSmtpHost.trim() || "smtp.gmail.com",
+          port: Number(customSmtpPort) || 465,
+          secure: Number(customSmtpPort) === 465,
+          user: customSmtpUser.trim(),
+          pass: customSmtpPass.trim(),
+        },
       };
 
-      if (useCustomSmtp && customSmtpUser && customSmtpPass) {
-        payloadToSend.smtp = {
-          host: customSmtpHost,
-          port: Number(customSmtpPort),
-          secure: Number(customSmtpPort) === 465,
-          user: customSmtpUser,
-          pass: customSmtpPass,
-        };
-        // If from email matches default dummy, use the authenticated smtp user
-        if (!fromEmail || fromEmail === "noreply@yourdomain.com") {
-          payloadToSend.from = customSmtpUser;
-        }
-        try {
-          localStorage.setItem(
-            "email_api_custom_smtp",
-            JSON.stringify({
-              user: customSmtpUser,
-              pass: customSmtpPass,
-              host: customSmtpHost,
-              port: customSmtpPort,
-              useCustomSmtp: true,
-            })
-          );
-        } catch {}
-      }
+      try {
+        localStorage.setItem(
+          "email_api_custom_smtp",
+          JSON.stringify({
+            user: customSmtpUser.trim(),
+            pass: customSmtpPass.trim(),
+            host: customSmtpHost.trim(),
+            port: customSmtpPort,
+          })
+        );
+      } catch {}
 
       const res = await fetch("/api/v1/send", {
         method: "POST",
@@ -735,80 +734,90 @@ export default function DashboardPage() {
                     />
                   </div>
 
-                  {/* Custom SMTP Toggle (e.g. Gmail App Password) */}
-                  <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 space-y-3">
+                  {/* Mandatory SMTP Relay Credentials (BYOS) */}
+                  <div className="bg-slate-950/90 border border-amber-500/30 rounded-xl p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-300">
-                        <input
-                          type="checkbox"
-                          checked={useCustomSmtp}
-                          onChange={(e) => {
-                            setUseCustomSmtp(e.target.checked);
-                            if (e.target.checked && customSmtpUser) {
-                              setFromEmail(customSmtpUser);
-                            }
-                          }}
-                          className="rounded border-slate-700 text-amber-500 focus:ring-amber-400"
-                        />
-                        <span>Use Custom SMTP (e.g. Your Gmail)</span>
-                      </label>
-                      <span className="text-[10px] font-mono text-amber-400/80 bg-amber-400/10 px-2 py-0.5 rounded">Optional</span>
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-amber-400" />
+                        <span className="text-xs font-bold text-slate-100">Your SMTP Relay Credentials</span>
+                      </div>
+                      <span className="text-[10px] font-mono text-amber-400 bg-amber-400/10 border border-amber-500/20 px-2 py-0.5 rounded font-semibold">
+                        Required (BYOS)
+                      </span>
                     </div>
 
-                    {useCustomSmtp && (
-                      <div className="space-y-3 pt-2 border-t border-slate-800/80">
-                        <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-300 leading-relaxed">
-                          <strong>Gmail Note:</strong> Google enforces that emails send from your authenticated Gmail address. Enable 2-Step Verification and use a 16-character <strong>Google App Password</strong> (not your standard login password).
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-[11px] text-slate-400 mb-1">Gmail / SMTP Username</label>
-                            <input
-                              type="email"
-                              placeholder="yourname@gmail.com"
-                              value={customSmtpUser}
-                              onChange={(e) => {
-                                setCustomSmtpUser(e.target.value);
-                                setFromEmail(e.target.value);
-                              }}
-                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                              required={useCustomSmtp}
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[11px] text-slate-400 mb-1">16-char App Password</label>
-                            <input
-                              type="password"
-                              placeholder="abcd efgh ijkl mnop"
-                              value={customSmtpPass}
-                              onChange={(e) => setCustomSmtpPass(e.target.value)}
-                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                              required={useCustomSmtp}
-                            />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 text-[11px]">
-                          <div>
-                            <label className="block text-slate-400 mb-1">SMTP Host</label>
-                            <input
-                              type="text"
-                              value={customSmtpHost}
-                              onChange={(e) => setCustomSmtpHost(e.target.value)}
-                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-slate-400 mb-1">Port (465 SSL / 587 TLS)</label>
-                            <input
-                              type="number"
-                              value={customSmtpPort}
-                              onChange={(e) => setCustomSmtpPort(Number(e.target.value))}
-                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                            />
-                          </div>
-                        </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      This server operates on a <strong>Bring Your Own SMTP (BYOS)</strong> model. Supply your Gmail App Password or custom SMTP relay credentials. No credentials are saved on the server.
+                    </p>
+
+                    <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-300 flex items-start justify-between gap-3">
+                      <div>
+                        <strong>Using Gmail?</strong> Use your Gmail address and a 16-character <strong>Google App Password</strong> (not your regular account password).
                       </div>
-                    )}
+                      <Link
+                        href="/docs#gmail-guide"
+                        target="_blank"
+                        className="text-amber-400 hover:underline font-semibold shrink-0 text-[11px]"
+                      >
+                        Guide →
+                      </Link>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                          Gmail / SMTP Username <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                          type="email"
+                          placeholder="yourname@gmail.com"
+                          value={customSmtpUser}
+                          onChange={(e) => {
+                            setCustomSmtpUser(e.target.value);
+                            setFromEmail(e.target.value);
+                          }}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                          16-char App Password <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                          type="password"
+                          placeholder="abcd efgh ijkl mnop"
+                          value={customSmtpPass}
+                          onChange={(e) => setCustomSmtpPass(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-[11px]">
+                      <div>
+                        <label className="block text-slate-400 mb-1">SMTP Host</label>
+                        <input
+                          type="text"
+                          value={customSmtpHost}
+                          onChange={(e) => setCustomSmtpHost(e.target.value)}
+                          placeholder="smtp.gmail.com"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-400 mb-1">Port (465 SSL / 587 TLS)</label>
+                        <input
+                          type="number"
+                          value={customSmtpPort}
+                          onChange={(e) => setCustomSmtpPort(Number(e.target.value))}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
+                          required
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   <button

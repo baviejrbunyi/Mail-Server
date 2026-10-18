@@ -13,11 +13,39 @@ Because Vercel is a serverless environment with ephemeral file systems and execu
 
 ---
 
-## 2. Environment & DB Setup
+## 2. Step-by-Step Setup Guide
 
-### Environment Variables (`.env.local`)
+### Step 1: Clone & Install Dependencies
+```bash
+git clone <repository-url>
+cd email-api-server
+npm install
+```
+
+### Step 2: Supabase Setup (Database & Auth)
+1. Create a free project on [Supabase](https://supabase.com/).
+2. Go to the **SQL Editor** in your Supabase dashboard and execute the SQL script from `supabase/schema.sql` to create the `api_keys` and `email_logs` tables.
+3. Retrieve your **Supabase URL**, **Anon Key**, and **Service Role Key** from **Project Settings -> API**.
+
+### Step 3: Upstash QStash Setup (Queue & Webhooks)
+1. Create a free account on [Upstash Console](https://console.upstash.com/).
+2. Navigate to the **QStash** tab to get your:
+   - `QSTASH_TOKEN`
+   - `QSTASH_CURRENT_SIGNING_KEY` (used for secure webhook signature verification).
+
+### Step 4: SMTP Relay Setup
+Choose an email provider (Mailgun, SendGrid, Resend, or Gmail App Password) to get your SMTP credentials:
+- `SMTP_HOST`: e.g., `smtp.mailgun.org` or `smtp.gmail.com`
+- `SMTP_PORT`: `587`
+- `SMTP_USER`: Your SMTP username or email address
+- `SMTP_PASSWORD`: Your SMTP password or Google App Password
+- `SMTP_FROM_DEFAULT`: Default sender address
+
+### Step 5: Configure Environment Variables
+Create a `.env.local` file in the root directory based on `.env.example`:
+
 ```env
-NEXT_PUBLIC_SUPABASE_URL="https://your-supabase-project.supabase.co"
+NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
 SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 
@@ -30,41 +58,41 @@ SMTP_USER="postmaster@yourdomain.com"
 SMTP_PASSWORD="your-smtp-password"
 SMTP_FROM_DEFAULT="noreply@yourdomain.com"
 
-NEXT_PUBLIC_APP_URL="https://your-vercel-app.vercel.app"
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
-
-### Supabase SQL Schema (`supabase/schema.sql`)
-Run the schema in your Supabase SQL Editor to provision `api_keys` and `email_logs` tables with Row Level Security (RLS).
 
 ---
 
-## 3. Verification cURL Commands
+## 3. Running Locally & Testing
 
-### 1. Generate an API Key (via Dashboard or API)
-```bash
-curl -X POST https://your-vercel-app.vercel.app/api/v1/keys \
-  -H "Content-Type: application/json" \
-  -d '{"userId": "usr_demo_123", "name": "Production Key"}'
-```
+1. Start the development server:
+   ```bash
+   npm run dev
+   ```
+2. Open `http://localhost:3000` in your browser.
+3. Go to the **Dashboard**, sign in with your demo email (max 3 users), and generate an API key.
+4. Test sending an email via the API Playground or cURL:
 
-### 2. Send an Email (`POST /api/v1/send`)
 ```bash
-curl -X POST https://your-vercel-app.vercel.app/api/v1/send \
-  -H "Authorization: Bearer ak_live_..." \
+curl -X POST http://localhost:3000/api/v1/send \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "to": "recipient@example.com",
     "from": "noreply@yourdomain.com",
-    "subject": "Hello via Vercel Serverless API",
-    "text": "This email was queued via QStash and delivered via Nodemailer."
+    "subject": "Hello from Local API",
+    "text": "Testing serverless email queue."
   }'
 ```
 
-### 3. Check Message Status (`GET /api/v1/messages/:id`)
-```bash
-curl -X GET https://your-vercel-app.vercel.app/api/v1/messages/msg_1234567890 \
-  -H "Authorization: Bearer ak_live_..."
-```
+---
+
+## 4. Deploying to Production (Vercel)
+
+1. Push your code to GitHub.
+2. Import the project into [Vercel](https://vercel.com/).
+3. In your Vercel Project Settings -> **Environment Variables**, add all your production credentials from `.env.local`, updating `NEXT_PUBLIC_APP_URL` to your production Vercel domain (`https://your-app.vercel.app`).
+4. Click **Deploy**.
 
 ---
 

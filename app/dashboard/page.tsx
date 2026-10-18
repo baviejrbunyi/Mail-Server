@@ -86,6 +86,7 @@ export default function DashboardPage() {
     setIsLoggedIn(true);
     setDemoUserCount((prev) => prev + 1);
     localStorage.setItem("email_api_user", JSON.stringify({ userId: mockUserId, email: userEmail }));
+    fetchData(mockUserId);
   };
 
   const handleLogout = () => {
@@ -100,33 +101,41 @@ export default function DashboardPage() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setUserId(parsed.userId);
-        setUserEmail(parsed.email);
-        setIsLoggedIn(true);
+        if (parsed.email) {
+          const validUserId = parsed.userId || "usr_" + parsed.email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "") + "_12345";
+          setUserId(validUserId);
+          setUserEmail(parsed.email);
+          setIsLoggedIn(true);
+          fetchData(validUserId);
+        }
       } catch {}
     }
   }, []);
 
   // Fetch API Keys & Logs when logged in
-  const fetchData = async () => {
-    if (!userId) return;
+  const fetchData = async (targetUserId?: string) => {
+    const activeUserId = targetUserId || userId;
+    if (!activeUserId || activeUserId === "null" || activeUserId === "undefined") return;
     setIsLoadingLogs(true);
     try {
       // Fetch keys
-      const keysRes = await fetch(`/api/v1/keys?userId=${userId}`);
-      const keysData = await keysRes.json();
-      if (keysData.keys) {
-        setApiKeys(keysData.keys);
-        if (keysData.keys.length > 0 && !selectedKey) {
-          // Use prefix as placeholder or allow creating
+      const keysRes = await fetch(`/api/v1/keys?userId=${encodeURIComponent(activeUserId)}`);
+      if (keysRes.ok) {
+        const keysData = await keysRes.json();
+        if (keysData.keys) {
+          setApiKeys(keysData.keys);
+          if (keysData.keys.length > 0 && !selectedKey) {
+            setSelectedKey(keysData.keys[0].key_prefix);
+          }
         }
       }
 
-      // Fetch logs if we have a key
-      if (apiKeys.length > 0) {
-        const logsRes = await fetch(`/api/v1/messages`, {
-          headers: { Authorization: `Bearer ak_live_demo123456` },
-        });
+      // Fetch logs
+      const activeAuthKey = selectedKey || "ak_live_demo123456789abcdef0123456789abcdef";
+      const logsRes = await fetch(`/api/v1/messages`, {
+        headers: { Authorization: `Bearer ${activeAuthKey}` },
+      });
+      if (logsRes.ok) {
         const logsData = await logsRes.json();
         if (logsData.items) {
           setLogs(logsData.items);
@@ -140,15 +149,15 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    if (isLoggedIn) {
-      fetchData();
+    if (isLoggedIn && userId && userId !== "null" && userId !== "undefined") {
+      fetchData(userId);
     }
   }, [isLoggedIn, userId]);
 
   // Create API Key
   const handleCreateApiKey = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newKeyName || !userId) return;
+    if (!newKeyName || !userId || userId === "null" || userId === "undefined") return;
     setIsCreatingKey(true);
     setRawCreatedKey("");
 
@@ -163,7 +172,7 @@ export default function DashboardPage() {
         setRawCreatedKey(data.apiKey);
         setSelectedKey(data.apiKey);
         setNewKeyName("");
-        fetchData();
+        fetchData(userId);
       } else {
         alert(data.error || "Failed to create API key");
       }
@@ -478,7 +487,7 @@ export default function DashboardPage() {
                     <p className="text-xs text-slate-400">Real-time status tracking via Supabase</p>
                   </div>
                   <button
-                    onClick={fetchData}
+                    onClick={() => fetchData()}
                     className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
                     title="Refresh Logs"
                   >

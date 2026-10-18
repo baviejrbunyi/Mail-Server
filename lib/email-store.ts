@@ -1,37 +1,64 @@
-export interface EmailLog {
-  MessageId: string;
-  ClientId: string;
-  To: string | string[];
-  From: string;
-  Subject: string;
-  Status: "queued" | "sent" | "failed";
-  RetryCount: number;
-  ErrorMsg?: string;
-  CreatedAt: string;
-  UpdatedAt: string;
+export interface StoredApiKey {
+  id: string;
+  user_id: string;
+  api_key: string;
+  key_prefix: string;
+  name: string;
+  status: "ACTIVE" | "REVOKED";
+  created_at: string;
 }
 
-export const globalEmailLogs: EmailLog[] = [
+export interface StoredEmailLog {
+  message_id: string;
+  user_id?: string;
+  client_id?: string;
+  recipient: string[];
+  sender: string;
+  subject: string;
+  text?: string;
+  html?: string;
+  status: "queued" | "sent" | "failed";
+  retry_count: number;
+  error_msg?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const globalApiKeys: StoredApiKey[] = [
   {
-    MessageId: "msg-demo-101",
-    ClientId: "client_prod_sample",
-    To: "recipient@example.com",
-    From: "sender@yourdomain.com",
-    Subject: "Welcome to AWS Serverless Email API",
-    Status: "sent",
-    RetryCount: 0,
-    CreatedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-    UpdatedAt: new Date(Date.now() - 3600000 * 2 + 1500).toISOString(),
+    id: "key_demo_default",
+    user_id: "usr_demo_default",
+    api_key: "ak_live_demo123456789abcdef0123456789abcdef",
+    key_prefix: "ak_live_demo...",
+    name: "Default Demo Key",
+    status: "ACTIVE",
+    created_at: new Date().toISOString(),
+  },
+];
+
+export const globalEmailLogs: StoredEmailLog[] = [
+  {
+    message_id: "msg_demo_101",
+    user_id: "usr_demo_default",
+    client_id: "ak_live_demo",
+    recipient: ["recipient@example.com"],
+    sender: "noreply@yourdomain.com",
+    subject: "Welcome to Serverless Email API",
+    status: "sent",
+    retry_count: 0,
+    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+    updated_at: new Date(Date.now() - 3600000 * 2 + 1500).toISOString(),
   },
   {
-    MessageId: "msg-demo-102",
-    ClientId: "client_prod_sample",
-    To: "alerts@yourdomain.com",
-    From: "monitor@yourdomain.com",
-    Subject: "Daily System Health Report",
-    Status: "queued",
-    RetryCount: 0,
-    CreatedAt: new Date(Date.now() - 60000 * 15).toISOString(),
-    UpdatedAt: new Date(Date.now() - 60000 * 15).toISOString(),
+    message_id: "msg_demo_102",
+    user_id: "usr_demo_default",
+    client_id: "ak_live_demo",
+    recipient: ["team@example.com"],
+    sender: "alerts@yourdomain.com",
+    subject: "Daily System Delivery Summary",
+    status: "queued",
+    retry_count: 0,
+    created_at: new Date(Date.now() - 60000 * 15).toISOString(),
+    updated_at: new Date(Date.now() - 60000 * 15).toISOString(),
   },
 ];

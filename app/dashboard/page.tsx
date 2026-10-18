@@ -203,7 +203,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Supabase Auth: Sign In or Sign Up
+  // Supabase Auth: Sign In or Sign Up via server-side auto-confirming API
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthMessage(null);
@@ -216,50 +216,32 @@ export default function DashboardPage() {
     }
 
     try {
-      if (authMode === "signup") {
-        // Enforce maximum 3 demo users restriction
-        if (dbStatus?.counts?.users && dbStatus.counts.users >= 3) {
-          setAuthMessage({
-            type: "error",
-            text: "Demo user limit reached (maximum 3 accounts allowed). Please sign in to an existing demo account.",
-          });
-          setAuthLoading(false);
-          return;
-        }
-
-        const { data, error } = await supabase.auth.signUp({
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: authMode === "signup" ? "register" : "login",
           email: emailInput,
           password: passwordInput,
-        });
+        }),
+      });
 
-        if (error) {
-          setAuthMessage({ type: "error", text: error.message });
-        } else if (data.user) {
-          const authUser = { id: data.user.id, email: data.user.email || emailInput };
-          setUser(authUser);
-          localStorage.setItem("email_api_user", JSON.stringify(authUser));
-          setAuthMessage({ type: "success", text: "Account created successfully!" });
-          fetchData(data.user.id);
-        }
-      } else {
-        // Sign In
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: emailInput,
-          password: passwordInput,
-        });
+      const data = await res.json();
 
-        if (error) {
-          // If Supabase Auth is not set up, provide clear guidance
-          setAuthMessage({
-            type: "error",
-            text: error.message || "Failed to sign in. If testing locally without Supabase Auth, use Demo Sandbox Login below.",
-          });
-        } else if (data.user) {
-          const authUser = { id: data.user.id, email: data.user.email || emailInput };
-          setUser(authUser);
-          localStorage.setItem("email_api_user", JSON.stringify(authUser));
-          fetchData(data.user.id);
-        }
+      if (!res.ok || !data.success) {
+        setAuthMessage({
+          type: "error",
+          text: data.error || "Authentication failed. If testing locally, you can also click Demo Sandbox Login.",
+        });
+      } else if (data.user) {
+        const authUser = { id: data.user.id, email: data.user.email || emailInput };
+        setUser(authUser);
+        localStorage.setItem("email_api_user", JSON.stringify(authUser));
+        setAuthMessage({
+          type: "success",
+          text: data.message || "Logged in successfully!",
+        });
+        fetchData(data.user.id);
       }
     } catch (err: any) {
       setAuthMessage({ type: "error", text: err.message });

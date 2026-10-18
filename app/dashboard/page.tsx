@@ -381,25 +381,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Manually trigger delivery for a queued message
-  const handleTriggerDelivery = async (messageId: string) => {
-    try {
-      const activeAuth = selectedKey || "ak_live_demo123456789abcdef0123456789abcdef";
-      const res = await fetch(`/api/v1/messages/${messageId}/process`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${activeAuth}` },
-      });
-      const data = await res.json();
-      if (res.ok) {
-        if (user?.id) fetchData(user.id);
-      } else {
-        console.error(data.error || "Delivery trigger failed");
-      }
-    } catch (err: any) {
-      console.error("Trigger error:", err);
-    }
-  };
-
   const copyToClipboard = async (text: string) => {
     await copyToClipboardSafe(text);
     setCopiedKey(true);
@@ -642,14 +623,14 @@ export default function DashboardPage() {
                           }}
                           className="text-amber-400 hover:underline font-semibold"
                         >
-                          Select for Testing
+                          Select Key
                         </button>
                       </div>
                     </div>
                   ))
                 ) : (
                   <div className="col-span-3 py-8 text-center text-slate-500 text-xs">
-                    No API keys created yet. Generate your first API key above to start testing.
+                    No API keys created yet. Generate your first API key above.
                   </div>
                 )}
               </div>
@@ -873,15 +854,6 @@ export default function DashboardPage() {
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-mono text-sky-300 font-medium">{log.message_id}</span>
                           <div className="flex items-center gap-2">
-                            {log.status === "queued" && (
-                              <button
-                                onClick={() => handleTriggerDelivery(log.message_id)}
-                                className="px-2 py-0.5 bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/30 rounded text-[10px] font-semibold transition-colors flex items-center gap-1"
-                                title="Run delivery worker immediately"
-                              >
-                                <Send className="w-2.5 h-2.5" /> Deliver Now
-                              </button>
-                            )}
                             <span
                               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold font-mono ${
                                 log.status === "sent"

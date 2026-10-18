@@ -1,136 +1,72 @@
-# AWS Serverless Email API Server
+# Serverless Email API Server (Vercel & Supabase)
 
-A lightweight, highly resilient, 100% serverless transactional email microservice designed for the AWS Free Tier. It bridges modern JSON HTTP payloads with traditional email delivery using **Amazon API Gateway**, **AWS Lambda**, **Amazon SQS**, **Amazon DynamoDB**, and **Amazon SES**.
-
----
-
-## 1. Project Overview
-
-Modern applications often struggle with synchronous email delivery bottlenecks where SMTP connections block HTTP response threads or time out under load. This architecture decouples email ingestion from delivery using an asynchronous producer-consumer queue pattern.
-
-- **Asynchronous Ingestion**: `POST /api/v1/send` validates the request, logs it as `queued` in DynamoDB, publishes a job to an SQS FIFO queue, and returns `202 Accepted` in milliseconds.
-- **Reliable Worker Delivery**: SQS triggers a worker Lambda (`processEmailQueue`) that uses AWS SDK v3 <code className="text-amber-400">SESClient</code> to send emails via Amazon SES.
-- **Resilience & Dead Letter Queue**: Failed deliveries (e.g. throttling or network errors) automatically retry up to 3 times before routing to an SQS Dead Letter Queue (DLQ).
-- **Secure Authentication**: API requests are authenticated using Bearer tokens verified against a DynamoDB <code className="text-amber-400">ApiKeys</code> table.
+A lightweight, independent serverless Email API Server designed to bridge modern HTTP JSON payloads with traditional SMTP protocols. Deployed on **Vercel** using **Next.js App Router**, **Supabase (PostgreSQL)**, **Upstash QStash**, and **Nodemailer**.
 
 ---
 
-## 2. Architecture & Data Flow
+## 1. Project Overview & Architecture
 
-```
-┌─────────────────┐       ┌──────────────────────┐       ┌─────────────────────┐
-│  HTTP Client    │──────>│ API Gateway (REST)   │──────>│ Ingest Lambda       │
-│  (curl / App)   │       │ POST /api/v1/send    │       │ (ingestEmail.ts)    │
-└─────────────────┘       └──────────────────────┘       └──────────┬──────────┘
-                                                                    │
-                          ┌──────────────────────┐                  │ Save Record &
-                          │ DynamoDB ApiKeys &   │<─────────────────┘ Publish Job
-                          │ EmailLogs Tables     │                     to SQS
-                          └──────────▲───────────┘
-                                     │ Update
-                                     │ Status
-┌─────────────────┐       ┌──────────┴───────────┐       ┌─────────────────────┐
-│ Amazon SES      │<──────│ SQS Worker Lambda    │<──────│ Amazon SQS Queue    │
-│ (Email Delivery)│       │ (processEmailQueue)  │       │ (with DLQ)          │
-└─────────────────┘       └──────────────────────┘       └─────────────────────┘
-```
+Because Vercel is a serverless environment with ephemeral file systems and execution timeouts, background daemon loops are prohibited. This architecture uses **Upstash QStash** as a serverless webhook message queue:
 
-### DynamoDB Schema
-1. **`ApiKeys` Table**:
-   - **Partition Key**: `ApiKey` (String)
-   - **Attributes**: `ClientId`, `Status` (`ACTIVE` / `INACTIVE`), `CreatedAt`
-2. **`EmailLogs` Table**:
-   - **Partition Key**: `MessageId` (String, UUID)
-   - **Global Secondary Index (GSI)**: `ClientId-CreatedAt-Index` (Hash Key: `ClientId`, Sort Key: `CreatedAt`)
-   - **Attributes**: `To`, `From`, `Subject`, `Status` (`queued`, `sent`, `failed`), `RetryCount`, `ErrorMsg`, `CreatedAt`, `UpdatedAt`
+- **HTTP Ingestion (`POST /api/v1/send`)**: Validates the payload and API key, records the email as `queued` in Supabase, and publishes a job to Upstash QStash.
+- **Worker Webhook (`POST /api/internal/process-email`)**: Triggered securely by QStash, this endpoint executes the SMTP transmission via `nodemailer` and updates Supabase (`sent` or `failed`). QStash automatically handles up to 3 retries on failure.
 
 ---
 
-## 3. Implementation Details
+## 2. Environment & DB Setup
 
-- **Infrastructure as Code**: Defined using AWS SAM (`backend/template.yaml`) for seamless CloudFormation deployment.
-- **Runtime**: Node.js 20.x & TypeScript.
-- **AWS SDK v3**: Modular imports (`@aws-sdk/client-ses`, `@aws-sdk/client-dynamodb`, `@aws-sdk/lib-dynamodb`, `@aws-sdk/client-sqs`).
-- **Developer Dashboard**: Included Next.js interactive developer console for testing API requests, viewing message audit logs, and inspecting code snippets.
+### Environment Variables (`.env.local`)
+```env
+NEXT_PUBLIC_SUPABASE_URL="https://your-supabase-project.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
+SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+
+QSTASH_TOKEN="your-qstash-token"
+QSTASH_CURRENT_SIGNING_KEY="your-qstash-signing-key"
+
+SMTP_HOST="smtp.mailgun.org"
+SMTP_PORT="587"
+SMTP_USER="postmaster@yourdomain.com"
+SMTP_PASSWORD="your-smtp-password"
+SMTP_FROM_DEFAULT="noreply@yourdomain.com"
+
+NEXT_PUBLIC_APP_URL="https://your-vercel-app.vercel.app"
+```
+
+### Supabase SQL Schema (`supabase/schema.sql`)
+Run the schema in your Supabase SQL Editor to provision `api_keys` and `email_logs` tables with Row Level Security (RLS).
 
 ---
 
-## 4. Setup & Production Deployment Guide
+## 3. Verification cURL Commands
 
-### Prerequisites
-1. **AWS CLI** configured with administrator or deployment credentials (`aws configure`).
-2. **AWS SAM CLI** installed (`sam --version`).
-3. **Node.js 20+** and npm installed.
-
-### Step 1: Clone and Install Dependencies
+### 1. Generate an API Key (via Dashboard or API)
 ```bash
-git clone <repository-url>
-cd aws-serverless-email-api
-npm install
+curl -X POST https://your-vercel-app.vercel.app/api/v1/keys \
+  -H "Content-Type: application/json" \
+  -d '{"userId": "usr_demo_123", "name": "Production Key"}'
 ```
 
-### Step 2: Build & Package with AWS SAM
-Navigate to the backend directory or root and build the SAM application:
+### 2. Send an Email (`POST /api/v1/send`)
 ```bash
-cd backend
-sam build
-```
-
-### Step 3: Deploy to AWS
-Run guided deployment to create your CloudFormation stack, API Gateway, DynamoDB tables, SQS queues, and Lambda functions:
-```bash
-sam deploy --guided
-```
-*Follow the prompts (e.g., stack name `email-api-prod`, region `us-east-1`, confirm changesets).*
-
-### Step 4: Seed an API Key in DynamoDB
-To authenticate your API requests, add an active API key item to your DynamoDB <code className="text-amber-400">ApiKeys</code> table via AWS CLI or Console:
-```bash
-aws dynamodb put-item \
-    --table-name ApiKeys \
-    --item '{"ApiKey": {"S": "ak_prod_99f83a2b1c4e"}, "ClientId": {"S": "client_production"}, "Status": {"S": "ACTIVE"}}'
-```
-
-### Step 5: Verify Amazon SES Setup (Important)
-- **SES Sandbox**: New AWS SES accounts start in the SES Sandbox. You must verify your sender email address or domain in the **Amazon SES Console -> Verified Identities**.
-- To send emails to arbitrary addresses in production, submit a support request to lift SES sandbox restrictions.
-
-### Step 6: Test Your Deployed API
-
-**1. Send an Email (POST):**
-```bash
-curl -X POST https://YOUR_API_ID.execute-api.REGION.amazonaws.com/prod/api/v1/send \\
-  -H "Authorization: Bearer ak_prod_99f83a2b1c4e" \\
-  -H "Content-Type: application/json" \\
+curl -X POST https://your-vercel-app.vercel.app/api/v1/send \
+  -H "Authorization: Bearer ak_live_..." \
+  -H "Content-Type: application/json" \
   -d '{
-    "to": "recipient@verifieddomain.com",
-    "from": "sender@verifieddomain.com",
-    "subject": "Hello from Production API",
-    "text": "This email was delivered via API Gateway, SQS, and SES."
+    "to": "recipient@example.com",
+    "from": "noreply@yourdomain.com",
+    "subject": "Hello via Vercel Serverless API",
+    "text": "This email was queued via QStash and delivered via Nodemailer."
   }'
 ```
-*Expected Response (202 Accepted):*
-```json
-{
-  "status": "accepted",
-  "messageId": "msg_a1b2c3d4e5f6",
-  "message": "Email accepted and published to SQS queue for delivery."
-}
-```
 
-**2. Check Message Delivery Status (GET):**
+### 3. Check Message Status (`GET /api/v1/messages/:id`)
 ```bash
-curl -X GET https://YOUR_API_ID.execute-api.REGION.amazonaws.com/prod/api/v1/messages/msg_a1b2c3d4e5f6 \\
-  -H "Authorization: Bearer ak_prod_99f83a2b1c4e"
-```
-
-**3. List Audit Logs (GET):**
-```bash
-curl -X GET https://YOUR_API_ID.execute-api.REGION.amazonaws.com/prod/api/v1/messages \\
-  -H "Authorization: Bearer ak_prod_99f83a2b1c4e"
+curl -X GET https://your-vercel-app.vercel.app/api/v1/messages/msg_1234567890 \
+  -H "Authorization: Bearer ak_live_..."
 ```
 
 ---
 
 ## License
-MIT License. Free for commercial and open-source use under AWS Free Tier guidelines.
+MIT License. Free for commercial and open-source use.

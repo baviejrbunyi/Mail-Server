@@ -36,31 +36,6 @@ export const globalApiKeys: StoredApiKey[] = [
   },
 ];
 
-export const globalEmailLogs: StoredEmailLog[] = [
-  {
-    message_id: "msg_demo_101",
-    user_id: "usr_demo_default",
-    client_id: "ak_live_demo",
-    recipient: ["recipient@example.com"],
-    sender: "noreply@yourdomain.com",
-    subject: "Welcome to Serverless Email API",
-    status: "sent",
-    retry_count: 0,
-    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-    updated_at: new Date(Date.now() - 3600000 * 2 + 1500).toISOString(),
-  },
-  {
-    message_id: "msg_demo_102",
-    user_id: "usr_demo_default",
-    client_id: "ak_live_demo",
-    recipient: ["team@example.com"],
-    sender: "alerts@yourdomain.com",
-    subject: "Daily System Delivery Summary",
-    status: "queued",
-    retry_count: 0,
-    created_at: new Date(Date.now() - 60000 * 15).toISOString(),
-    updated_at: new Date(Date.now() - 60000 * 15).toISOString(),
-  },
-];
+export const globalEmailLogs: StoredEmailLog[] = [];
 
 export const globalRegisteredUsers = new Set<string>();

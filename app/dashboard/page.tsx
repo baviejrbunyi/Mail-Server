@@ -580,7 +580,7 @@ export default function DashboardPage() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-100">API Keys</h3>
-                  <p className="text-xs text-slate-400">Authenticated with user UUID: <code className="px-1.5 py-0.5 rounded text-[11px] font-mono bg-slate-950 border border-slate-800 text-sky-300">{user.id}</code></p>
+                  <p className="text-xs text-slate-400">Manage secret keys for authenticating API requests</p>
                 </div>
 
                 <form onSubmit={handleCreateApiKey} className="flex items-center gap-2">
@@ -649,7 +649,7 @@ export default function DashboardPage() {
                   ))
                 ) : (
                   <div className="col-span-3 py-8 text-center text-slate-500 text-xs">
-                    No API keys created yet. Generate your first API key above or click "Seed Demo Data".
+                    No API keys created yet. Generate your first API key above to start testing.
                   </div>
                 )}
               </div>
@@ -659,12 +659,9 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Playground */}
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
-                <div className="border-b border-slate-800 pb-3 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-100">API Playground</h3>
-                    <p className="text-xs text-slate-400">Test <code className="px-1.5 py-0.5 rounded text-[11px] font-mono bg-slate-950 border border-slate-800 text-sky-300">POST /api/v1/send</code> with live validation</p>
-                  </div>
-                  <span className="text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-1 rounded">202 Accepted</span>
+                <div className="border-b border-slate-800 pb-3">
+                  <h3 className="text-lg font-semibold text-slate-100">API Playground</h3>
+                  <p className="text-xs text-slate-400">Test <code className="px-1.5 py-0.5 rounded text-[11px] font-mono bg-slate-950 border border-slate-800 text-sky-300">POST /api/v1/send</code> with live validation</p>
                 </div>
 
                 <form onSubmit={handleSendEmail} className="space-y-4">
@@ -808,14 +805,16 @@ export default function DashboardPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-slate-400 mb-1">Port (465 SSL / 587 TLS)</label>
-                        <input
-                          type="number"
+                        <label className="block text-slate-400 mb-1">Port</label>
+                        <select
                           value={customSmtpPort}
                           onChange={(e) => setCustomSmtpPort(Number(e.target.value))}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
+                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-mono cursor-pointer"
                           required
-                        />
+                        >
+                          <option value={465}>465 (SSL - Recommended)</option>
+                          <option value={587}>587 (TLS / STARTTLS)</option>
+                        </select>
                       </div>
                     </div>
                   </div>
@@ -913,7 +912,7 @@ export default function DashboardPage() {
                     ))
                   ) : (
                     <div className="py-24 text-center text-slate-500 text-xs">
-                      No email delivery logs recorded yet. Click "Seed Demo Data" above or send a test email.
+                      No email delivery logs recorded yet. Send a test email via the API playground.
                     </div>
                   )}
                 </div>

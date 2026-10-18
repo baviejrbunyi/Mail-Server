@@ -1,0 +1,6 @@
+{
+  "name": "AWS Serverless Email API Server & Console",
+  "description": "High-performance serverless email delivery microservice powered by AWS Lambda, SQS, DynamoDB, and Amazon SES.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

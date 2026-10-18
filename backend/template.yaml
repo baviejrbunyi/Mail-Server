@@ -1,0 +1,175 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  AWS Serverless Email API Server
+  Lightweight high-performance email microservice using API Gateway, Lambda, SQS, DynamoDB, and SES.
+
+Globals:
+  Function:
+    Timeout: 15
+    MemorySize: 256
+    Runtime: nodejs20.x
+    Environment:
+      Variables:
+        API_KEYS_TABLE: !Ref ApiKeysTable
+        EMAIL_LOGS_TABLE: !Ref EmailLogsTable
+        SES_REGION: !Ref AWS::Region
+
+Resources:
+  # ==========================================
+  # DynamoDB Tables
+  # ==========================================
+  ApiKeysTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ApiKeys
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: ApiKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ApiKey
+          KeyType: HASH
+
+  EmailLogsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: EmailLogs
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: MessageId
+          AttributeType: S
+        - AttributeName: ClientId
+          AttributeType: S
+        - AttributeName: CreatedAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: MessageId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: ClientId-CreatedAt-Index
+          KeySchema:
+            - AttributeName: ClientId
+              KeyType: HASH
+            - AttributeName: CreatedAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # ==========================================
+  # SQS Queue & Dead Letter Queue
+  # ==========================================
+  EmailDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: EmailDLQ.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      MessageRetentionPeriod: 1209600 # 14 days
+
+  EmailQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: EmailQueue.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      VisibilityTimeout: 60
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt EmailDLQ.Arn
+        maxReceiveCount: 3
+
+  # ==========================================
+  # API Gateway REST API
+  # ==========================================
+  EmailApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+
+  # ==========================================
+  # Lambda Functions (Producer & Consumer)
+  # ==========================================
+  IngestEmailFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/src/
+      Handler: handlers/ingestEmail.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ApiKeysTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EmailLogsTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt EmailQueue.QueueName
+      Events:
+        SendApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EmailApi
+            Path: /api/v1/send
+            Method: POST
+
+  ProcessEmailQueueFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/src/
+      Handler: handlers/processEmailQueue.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EmailLogsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: "*"
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+        Q: !GetAtt EmailQueue.Arn
+        BatchSize: 5
+
+  GetMessageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/src/
+      Handler: handlers/getMessage.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref EmailLogsTable
+      Events:
+        GetApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EmailApi
+            Path: /api/v1/messages/{id}
+            Method: GET
+
+  ListMessagesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/src/
+      Handler: handlers/listMessages.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref EmailLogsTable
+      Events:
+        ListApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EmailApi
+            Path: /api/v1/messages
+            Method: GET
+
+Outputs:
+  ApiURL:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${EmailApi}.execute-api.${AWS::Region}.amazonaws.com/prod/"
+  EmailQueueArn:
+    Description: "SQS Email Queue ARN"
+    Value: !GetAtt EmailQueue.Arn

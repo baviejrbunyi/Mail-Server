@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateApiKey } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { globalEmailLogs, StoredEmailLog } from "@/lib/email-store";
-import { deliverEmail } from "@/lib/email-sender";
+import { deliverEmail, CustomSmtpConfig } from "@/lib/email-sender";
 import { Client } from "@upstash/qstash";
 import crypto from "crypto";
 
@@ -25,6 +25,7 @@ interface SendEmailPayload {
   text?: string;
   html?: string;
   attachments?: Array<{ filename: string; content?: string; path?: string }>;
+  smtp?: CustomSmtpConfig;
 }
 
 function validateEmailPayload(body: any): { isValid: boolean; error?: string; data?: SendEmailPayload } {
@@ -96,6 +97,18 @@ function validateEmailPayload(body: any): { isValid: boolean; error?: string; da
     }
   }
 
+  // 6. Optional custom SMTP config
+  let customSmtp: CustomSmtpConfig | undefined = undefined;
+  if (body.smtp && typeof body.smtp === "object") {
+    customSmtp = {
+      host: body.smtp.host ? String(body.smtp.host).trim() : undefined,
+      port: body.smtp.port ? Number(body.smtp.port) : undefined,
+      secure: typeof body.smtp.secure === "boolean" ? body.smtp.secure : undefined,
+      user: body.smtp.user ? String(body.smtp.user).trim() : undefined,
+      pass: body.smtp.pass ? String(body.smtp.pass).trim() : undefined,
+    };
+  }
+
   return {
     isValid: true,
     data: {
@@ -105,6 +118,7 @@ function validateEmailPayload(body: any): { isValid: boolean; error?: string; da
       text: hasText ? body.text : undefined,
       html: hasHtml ? body.html : undefined,
       attachments: body.attachments,
+      smtp: customSmtp,
     },
   };
 }
@@ -227,6 +241,7 @@ export async function POST(req: NextRequest) {
             text: payload.text,
             html: payload.html,
             attachments: payload.attachments,
+            smtp: payload.smtp,
           },
         },
         retries: 3,

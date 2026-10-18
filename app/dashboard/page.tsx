@@ -21,6 +21,7 @@ import {
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { CodeEditor } from "@/components/CodeEditor";
+import { copyToClipboardSafe } from "@/lib/utils";
 
 interface ApiKeyItem {
   id: string;
@@ -86,9 +87,22 @@ export default function DashboardPage() {
   const [isSending, setIsSending] = useState(false);
   const [sendResponse, setSendResponse] = useState<any>(null);
 
+  // Custom SMTP Relay state in Playground
+  const [useCustomSmtp, setUseCustomSmtp] = useState(false);
+  const [customSmtpHost, setCustomSmtpHost] = useState("smtp.gmail.com");
+  const [customSmtpPort, setCustomSmtpPort] = useState<number>(465);
+  const [customSmtpUser, setCustomSmtpUser] = useState("");
+  const [customSmtpPass, setCustomSmtpPass] = useState("");
+
   // Audit Logs state
   const [logs, setLogs] = useState<EmailLogItem[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [actionToast, setActionToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setActionToast({ type, text });
+    setTimeout(() => setActionToast(null), 3500);
+  };
 
   // Initialize Auth state on mount & synchronize account stats
   useEffect(() => {
@@ -107,6 +121,22 @@ export default function DashboardPage() {
         }
       } catch {}
     }
+
+    // 2b. Restore saved custom SMTP preferences
+    try {
+      const savedSmtp = localStorage.getItem("email_api_custom_smtp");
+      if (savedSmtp) {
+        const parsedSmtp = JSON.parse(savedSmtp);
+        if (parsedSmtp.user) {
+          setCustomSmtpUser(parsedSmtp.user);
+          setFromEmail(parsedSmtp.user);
+        }
+        if (parsedSmtp.pass) setCustomSmtpPass(parsedSmtp.pass);
+        if (parsedSmtp.host) setCustomSmtpHost(parsedSmtp.host);
+        if (parsedSmtp.port) setCustomSmtpPort(Number(parsedSmtp.port));
+        if (typeof parsedSmtp.useCustomSmtp === "boolean") setUseCustomSmtp(parsedSmtp.useCustomSmtp);
+      }
+    } catch {}
 
     // 3. Check Supabase Auth session if configured
     try {
@@ -265,11 +295,12 @@ export default function DashboardPage() {
         setSelectedKey(data.apiKey);
         setNewKeyName("");
         fetchData(user.id);
+        showToast("API Key created successfully!", "success");
       } else {
-        alert(data.error || "Failed to create API key");
+        showToast(data.error || "Failed to create API key", "error");
       }
     } catch (err: any) {
-      alert("Error: " + err.message);
+      showToast("Error: " + err.message, "error");
     } finally {
       setIsCreatingKey(false);
     }
@@ -279,7 +310,7 @@ export default function DashboardPage() {
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedKey) {
-      alert("Please select or generate an API key first.");
+      showToast("Please select or generate an API key first.", "error");
       return;
     }
 
@@ -287,19 +318,47 @@ export default function DashboardPage() {
     setSendResponse(null);
 
     try {
+      const payloadToSend: any = {
+        to: toEmail,
+        from: fromEmail,
+        subject,
+        text: textBody,
+        html: htmlBody,
+      };
+
+      if (useCustomSmtp && customSmtpUser && customSmtpPass) {
+        payloadToSend.smtp = {
+          host: customSmtpHost,
+          port: Number(customSmtpPort),
+          secure: Number(customSmtpPort) === 465,
+          user: customSmtpUser,
+          pass: customSmtpPass,
+        };
+        // If from email matches default dummy, use the authenticated smtp user
+        if (!fromEmail || fromEmail === "noreply@yourdomain.com") {
+          payloadToSend.from = customSmtpUser;
+        }
+        try {
+          localStorage.setItem(
+            "email_api_custom_smtp",
+            JSON.stringify({
+              user: customSmtpUser,
+              pass: customSmtpPass,
+              host: customSmtpHost,
+              port: customSmtpPort,
+              useCustomSmtp: true,
+            })
+          );
+        } catch {}
+      }
+
       const res = await fetch("/api/v1/send", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${selectedKey}`,
         },
-        body: JSON.stringify({
-          to: toEmail,
-          from: fromEmail,
-          subject,
-          text: textBody,
-          html: htmlBody,
-        }),
+        body: JSON.stringify(payloadToSend),
       });
 
       const data = await res.json();
@@ -335,21 +394,41 @@ export default function DashboardPage() {
       if (res.ok) {
         if (user?.id) fetchData(user.id);
       } else {
-        alert(data.error || "Delivery trigger failed");
+        console.error(data.error || "Delivery trigger failed");
       }
     } catch (err: any) {
-      alert("Trigger error: " + err.message);
+      console.error("Trigger error:", err);
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const copyToClipboard = async (text: string) => {
+    await copyToClipboardSafe(text);
     setCopiedKey(true);
     setTimeout(() => setCopiedKey(false), 2000);
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
+      {/* Toast Notification */}
+      {actionToast && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <div
+            className={`px-4 py-3 rounded-xl text-xs font-semibold shadow-2xl border flex items-center gap-2.5 backdrop-blur-md ${
+              actionToast.type === "error"
+                ? "bg-red-950/90 border-red-500/40 text-red-200"
+                : "bg-emerald-950/90 border-emerald-500/40 text-emerald-200"
+            }`}
+          >
+            {actionToast.type === "error" ? (
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            )}
+            <span>{actionToast.text}</span>
+          </div>
+        </div>
+      )}
+
       {/* Top Header */}
       <header className="flex items-center justify-between gap-8 px-8 py-4 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
         <div className="flex items-center gap-3">
@@ -560,7 +639,7 @@ export default function DashboardPage() {
                         <button
                           onClick={() => {
                             setSelectedKey(k.key_prefix);
-                            alert("Selected key for playground!");
+                            showToast("Selected key for playground!", "success");
                           }}
                           className="text-amber-400 hover:underline font-semibold"
                         >
@@ -654,6 +733,82 @@ export default function DashboardPage() {
                       onChange={(e) => setHtmlBody(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-amber-500"
                     />
+                  </div>
+
+                  {/* Custom SMTP Toggle (e.g. Gmail App Password) */}
+                  <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={useCustomSmtp}
+                          onChange={(e) => {
+                            setUseCustomSmtp(e.target.checked);
+                            if (e.target.checked && customSmtpUser) {
+                              setFromEmail(customSmtpUser);
+                            }
+                          }}
+                          className="rounded border-slate-700 text-amber-500 focus:ring-amber-400"
+                        />
+                        <span>Use Custom SMTP (e.g. Your Gmail)</span>
+                      </label>
+                      <span className="text-[10px] font-mono text-amber-400/80 bg-amber-400/10 px-2 py-0.5 rounded">Optional</span>
+                    </div>
+
+                    {useCustomSmtp && (
+                      <div className="space-y-3 pt-2 border-t border-slate-800/80">
+                        <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-300 leading-relaxed">
+                          <strong>Gmail Note:</strong> Google enforces that emails send from your authenticated Gmail address. Enable 2-Step Verification and use a 16-character <strong>Google App Password</strong> (not your standard login password).
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] text-slate-400 mb-1">Gmail / SMTP Username</label>
+                            <input
+                              type="email"
+                              placeholder="yourname@gmail.com"
+                              value={customSmtpUser}
+                              onChange={(e) => {
+                                setCustomSmtpUser(e.target.value);
+                                setFromEmail(e.target.value);
+                              }}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                              required={useCustomSmtp}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] text-slate-400 mb-1">16-char App Password</label>
+                            <input
+                              type="password"
+                              placeholder="abcd efgh ijkl mnop"
+                              value={customSmtpPass}
+                              onChange={(e) => setCustomSmtpPass(e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                              required={useCustomSmtp}
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-[11px]">
+                          <div>
+                            <label className="block text-slate-400 mb-1">SMTP Host</label>
+                            <input
+                              type="text"
+                              value={customSmtpHost}
+                              onChange={(e) => setCustomSmtpHost(e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-slate-400 mb-1">Port (465 SSL / 587 TLS)</label>
+                            <input
+                              type="number"
+                              value={customSmtpPort}
+                              onChange={(e) => setCustomSmtpPort(Number(e.target.value))}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <button

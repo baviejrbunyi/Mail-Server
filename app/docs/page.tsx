@@ -20,9 +20,13 @@ import {
   Send,
   Sparkles,
   Globe,
-  CheckCheck
+  CheckCheck,
+  AlertTriangle,
+  TrendingUp,
+  ShieldAlert
 } from "lucide-react";
 import { CodeEditor } from "@/components/CodeEditor";
+import { copyToClipboardSafe } from "@/lib/utils";
 
 export default function DocumentationPage() {
   const [activeTab, setActiveTab] = useState<"curl" | "node" | "nextjs" | "python" | "go" | "php">("curl");
@@ -38,30 +42,34 @@ export default function DocumentationPage() {
     const sectionIds = [
       "overview",
       "quickstart",
+      "gmail-guide",
       "implementation",
       "endpoints",
+      "limitations",
+      "scaling",
       "use-cases",
       "troubleshooting"
     ];
 
     const handleScroll = () => {
-      // 140px accounts for sticky header height (approx 70px) and top breathing room
-      const scrollPosition = window.scrollY + 140;
-
-      // If scrolled near bottom of page, highlight the last section
       const scrollHeight = document.documentElement.scrollHeight;
       const clientHeight = window.innerHeight;
-      if (window.scrollY + clientHeight >= scrollHeight - 80) {
+      const scrollY = window.scrollY;
+
+      // If scrolled near bottom of page, highlight the last section
+      if (scrollY + clientHeight >= scrollHeight - 60) {
         setActiveSection(sectionIds[sectionIds.length - 1]);
         return;
       }
 
+      // Check sections from top to bottom
       let current = sectionIds[0];
       for (const id of sectionIds) {
         const el = document.getElementById(id);
         if (el) {
-          const top = el.offsetTop;
-          if (scrollPosition >= top) {
+          const rect = el.getBoundingClientRect();
+          // Sticky header is ~68px high. Section activates when its top reaches within 140px of viewport
+          if (rect.top <= 140) {
             current = id;
           }
         }
@@ -75,8 +83,8 @@ export default function DocumentationPage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const copyCode = (id: string, text: string) => {
-    navigator.clipboard.writeText(text);
+  const copyCode = async (id: string, text: string) => {
+    await copyToClipboardSafe(text);
     setCopiedIndex(id);
     setTimeout(() => setCopiedIndex(null), 2000);
   };
@@ -264,8 +272,11 @@ MAIL_SERVER_API_KEY=ak_live_YOUR_GENERATED_KEY_HERE`;
   const sections = [
     { id: "overview", label: "Using This Mail Server" },
     { id: "quickstart", label: "Quickstart (3 Steps)" },
+    { id: "gmail-guide", label: "Gmail SMTP Guide" },
     { id: "implementation", label: "Code Samples & SDKs" },
     { id: "endpoints", label: "API Reference" },
+    { id: "limitations", label: "Capabilities & Limits" },
+    { id: "scaling", label: "Scaling Up & Production" },
     { id: "use-cases", label: "Real-World Use Cases" },
     { id: "troubleshooting", label: "Developer FAQ" },
   ];
@@ -325,7 +336,14 @@ MAIL_SERVER_API_KEY=ak_live_YOUR_GENERATED_KEY_HERE`;
                     <a
                       key={sec.id}
                       href={`#${sec.id}`}
-                      onClick={() => setActiveSection(sec.id)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setActiveSection(sec.id);
+                        const target = document.getElementById(sec.id);
+                        if (target) {
+                          target.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }
+                      }}
                       className={`px-3 py-2 text-xs rounded-lg transition-all font-medium border-l-2 flex items-center justify-between group ${
                         isActive
                           ? "bg-amber-400/10 text-amber-400 font-semibold border-amber-400 shadow-sm"
@@ -604,7 +622,106 @@ MAIL_SERVER_API_KEY=ak_live_YOUR_GENERATED_KEY_HERE`;
             </div>
           </section>
 
-          {/* SECTION 3: IMPLEMENTATION & CODE SAMPLES */}
+          {/* SECTION: GMAIL SMTP SETUP GUIDE */}
+          <section id="gmail-guide" className="space-y-6 border-t border-slate-800/80 pt-12 scroll-mt-24">
+            <div className="inline-flex items-center gap-2 bg-red-500/10 border border-red-500/20 text-red-400 px-3 py-1 rounded-full text-xs font-semibold">
+              <Mail className="w-3.5 h-3.5" /> Gmail SMTP Integration Guide
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight text-slate-100">
+              Sending from Your Own Gmail Account (BYOS)
+            </h2>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              By default, if you don&apos;t specify your own credentials, emails route through the mail server&apos;s default relay. If you want emails delivered from your personal or business Gmail address (<code className="px-1.5 py-0.5 rounded text-xs font-mono bg-slate-900 border border-slate-800 text-amber-300">yourname@gmail.com</code>), pass your own Gmail SMTP credentials in the API request body.
+            </p>
+
+            {/* Anti-spoofing warning box */}
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-5 space-y-2">
+              <div className="flex items-center gap-2 text-amber-400 font-semibold text-xs">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>Why Does Gmail Rewrite or Restrict the &quot;From&quot; Address?</span>
+              </div>
+              <p className="text-xs text-amber-200/80 leading-relaxed">
+                Google enforces strict anti-spoofing security. When you authenticate via Gmail SMTP, Google requires the <code className="px-1.5 py-0.5 rounded text-[11px] font-mono bg-slate-950 border border-slate-800 text-amber-300">from</code> header to match your authenticated Gmail address (or a verified alias configured in your Gmail account under <em>Settings &gt; Accounts and Import &gt; &quot;Send mail as&quot;</em>). If you authenticate as <code className="text-slate-200">user@gmail.com</code> but attempt to send as <code className="text-slate-200">billing@company.com</code> without alias verification, Gmail will automatically rewrite the sender or reject the delivery.
+              </p>
+            </div>
+
+            {/* 4 Steps Guide */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Step 1 */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-6 h-6 rounded-md bg-amber-400 text-slate-950 flex items-center justify-center text-xs font-bold">1</span>
+                  <h3 className="text-sm font-bold text-slate-200">Enable 2-Step Verification</h3>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Google disallows standard account passwords for third-party SMTP. Go to your <a href="https://myaccount.google.com/security" target="_blank" rel="noreferrer" className="text-sky-400 hover:underline">Google Account Security page</a> and verify that <strong>2-Step Verification</strong> is switched <strong>ON</strong>.
+                </p>
+              </div>
+
+              {/* Step 2 */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-6 h-6 rounded-md bg-amber-400 text-slate-950 flex items-center justify-center text-xs font-bold">2</span>
+                  <h3 className="text-sm font-bold text-slate-200">Generate a 16-Char App Password</h3>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  In Google Account Security, search for <strong>&quot;App passwords&quot;</strong> (or visit <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" className="text-sky-400 hover:underline">myaccount.google.com/apppasswords</a>). Create a new password named &quot;Email API&quot;. Google will generate a unique 16-character code (e.g. <code className="px-1.5 py-0.5 rounded text-[11px] font-mono bg-slate-950 border border-slate-800 text-emerald-400">abcd efgh ijkl mnop</code>).
+                </p>
+              </div>
+
+              {/* Step 3 */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-6 h-6 rounded-md bg-amber-400 text-slate-950 flex items-center justify-center text-xs font-bold">3</span>
+                  <h3 className="text-sm font-bold text-slate-200">Pass SMTP Object in API Payload</h3>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Supply the optional <code className="px-1 py-0.5 rounded text-[11px] font-mono bg-slate-950 border border-slate-800 text-sky-300">smtp</code> object inside your JSON body to route directly through your Gmail relay using SSL port 465.
+                </p>
+              </div>
+
+              {/* Step 4 */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-6 h-6 rounded-md bg-amber-400 text-slate-950 flex items-center justify-center text-xs font-bold">4</span>
+                  <h3 className="text-sm font-bold text-slate-200">Test Live in the Console</h3>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Open the <Link href="/dashboard" className="text-amber-400 hover:underline font-semibold">Console Dashboard</Link>, scroll to the API Playground, check <strong>&quot;Use Custom SMTP (e.g. Your Gmail)&quot;</strong>, enter your Gmail address and 16-character App Password, and send a live test message!
+                </p>
+              </div>
+            </div>
+
+            {/* Code Sample with Gmail SMTP */}
+            <div className="space-y-3">
+              <span className="text-xs font-semibold text-slate-300">cURL Example with Your Gmail SMTP:</span>
+              <CodeEditor
+                code={`curl -X POST ${baseUrl}/api/v1/send \\
+  -H "Authorization: Bearer ak_live_YOUR_API_KEY_HERE" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "to": "client@example.com",
+    "from": "yourname@gmail.com",
+    "subject": "Order Confirmation #84920",
+    "html": "<h1>Order Received!</h1><p>Sent from my personal Gmail via the Serverless API.</p>",
+    "text": "Order Received! Sent from my personal Gmail via the Serverless API.",
+    "smtp": {
+      "host": "smtp.gmail.com",
+      "port": 465,
+      "secure": true,
+      "user": "yourname@gmail.com",
+      "pass": "abcd efgh ijkl mnop"
+    }
+  }'`}
+                language="curl"
+                filename="send-with-gmail.sh"
+                showLineNumbers={true}
+                copyable={true}
+              />
+            </div>
+          </section>
+
+          {/* SECTION 4: IMPLEMENTATION & CODE SAMPLES */}
           <section id="implementation" className="space-y-6 border-t border-slate-800/80 pt-12 scroll-mt-24">
             <div className="inline-flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 text-purple-400 px-3 py-1 rounded-full text-xs font-semibold">
               <Code2 className="w-3.5 h-3.5" /> Implementation & Code Samples
@@ -799,7 +916,222 @@ MAIL_SERVER_API_KEY=ak_live_YOUR_GENERATED_KEY_HERE`;
             </div>
           </section>
 
-          {/* SECTION 5: USE CASES */}
+          {/* SECTION: CAPABILITIES & LIMITATIONS */}
+          <section id="limitations" className="space-y-6 border-t border-slate-800/80 pt-12 scroll-mt-24">
+            <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-400 px-3 py-1 rounded-full text-xs font-semibold">
+              <ShieldAlert className="w-3.5 h-3.5" /> Capabilities & Limitations
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight text-slate-100">
+              What This Service Can &amp; Cannot Do
+            </h2>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              To choose the right email architecture for your application, understand the core operational capabilities and technical boundaries of this microservice.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* What It Can Do */}
+              <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center gap-2.5 pb-3 border-b border-emerald-500/20">
+                  <span className="w-6 h-6 rounded-md bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-xs">
+                    <Check className="w-3.5 h-3.5" />
+                  </span>
+                  <h3 className="text-base font-bold text-emerald-300">What It Can Do (Strengths)</h3>
+                </div>
+
+                <ul className="space-y-3.5 text-xs text-slate-300">
+                  <li className="flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-emerald-200">Sub-30ms Asynchronous Dispatch:</strong>
+                      <p className="text-slate-400 mt-0.5">Dispatches return an instant <code className="px-1 py-0.5 rounded text-[11px] font-mono bg-slate-900 border border-slate-800 text-emerald-400">202 Accepted</code>. Web visitors never suffer slow page loads waiting for remote SMTP connections.</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-emerald-200">Automatic Retries with Exponential Backoff:</strong>
+                      <p className="text-slate-400 mt-0.5">Powered by Upstash QStash message queuing, retrying temporary network blips or mail server greylisting up to 3 times automatically.</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-emerald-200">Per-Request Custom SMTP Routing (BYOS):</strong>
+                      <p className="text-slate-400 mt-0.5">Route any email through your own Gmail, Google Workspace, Resend, Amazon SES, SendGrid, or Postmark account using the <code className="px-1 py-0.5 rounded text-[11px] font-mono bg-slate-900 border border-slate-800 text-sky-300">smtp</code> payload object.</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-emerald-200">Complete Audit Trail &amp; Status Logs:</strong>
+                      <p className="text-slate-400 mt-0.5">Inspect full lifecycle states (<code className="text-amber-400 font-mono">queued</code>, <code className="text-blue-400 font-mono">sending</code>, <code className="text-emerald-400 font-mono">sent</code>, <code className="text-rose-400 font-mono">failed</code>) and exact failure diagnostics via API and Console.</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-emerald-200">Universal Language Support:</strong>
+                      <p className="text-slate-400 mt-0.5">Native REST JSON endpoints work seamlessly with Node, Python, Next.js Server Actions, Go, PHP, cURL, and mobile backends.</p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+              {/* What It Cannot Do */}
+              <div className="bg-rose-950/20 border border-rose-500/30 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center gap-2.5 pb-3 border-b border-rose-500/20">
+                  <span className="w-6 h-6 rounded-md bg-rose-500 text-slate-950 flex items-center justify-center font-bold text-xs">
+                    ✕
+                  </span>
+                  <h3 className="text-base font-bold text-rose-300">What It Can&apos;t Do (Limitations)</h3>
+                </div>
+
+                <ul className="space-y-3.5 text-xs text-slate-300">
+                  <li className="flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-rose-200">Gmail Daily Sending Limits (500/day):</strong>
+                      <p className="text-slate-400 mt-0.5">Consumer Gmail accounts restrict sending to <strong>500 recipients per 24 hours</strong> (2,000 for Google Workspace). Not intended for bulk marketing blasts or cold outreach.</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-rose-200">No Inbound Email Processing:</strong>
+                      <p className="text-slate-400 mt-0.5">This service is strictly an outbound transactional relay. It does not run an MX server to receive, parse, or route incoming reply emails.</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-rose-200">No Server-Side Template Rendering:</strong>
+                      <p className="text-slate-400 mt-0.5">The API expects pre-compiled <code className="px-1 py-0.5 rounded text-[11px] font-mono bg-slate-900 border border-slate-800 text-sky-300">html</code> and <code className="px-1 py-0.5 rounded text-[11px] font-mono bg-slate-900 border border-slate-800 text-sky-300">text</code>. Dynamic rendering (React Email, MJML, Handlebars) must occur in your caller application before dispatch.</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-rose-200">Reputation Bound to Connected SMTP:</strong>
+                      <p className="text-slate-400 mt-0.5">Inbox deliverability is determined by your SMTP provider and domain DNS (SPF/DKIM). The API does not warm up dedicated IP addresses for you.</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-rose-200">No Tracking Pixels or Link Rewriting:</strong>
+                      <p className="text-slate-400 mt-0.5">By design, this service does not inject invisible spy pixels or rewrite links to ensure zero tracking telemetry and maximum recipient privacy.</p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          {/* SECTION: SCALING UP & PRODUCTION */}
+          <section id="scaling" className="space-y-6 border-t border-slate-800/80 pt-12 scroll-mt-24">
+            <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-xs font-semibold">
+              <TrendingUp className="w-3.5 h-3.5" /> Scaling Up &amp; Production
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight text-slate-100">
+              How to Scale Up to 100,000+ Emails/Day
+            </h2>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              When your application outgrows Gmail&apos;s 500/day limit, scale effortlessly to enterprise-grade throughput with these four production steps.
+            </p>
+
+            <div className="space-y-4">
+              {/* Step 1: Switch to Amazon SES or Postmark */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center font-bold text-xs">
+                    1
+                  </span>
+                  <h3 className="text-base font-bold text-slate-200">Migrate from Gmail to an Enterprise ESP Relay</h3>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Switch the <code className="px-1.5 py-0.5 rounded text-[11px] font-mono bg-slate-950 border border-slate-800 text-sky-300">smtp</code> credentials to a dedicated transactional provider such as <strong>Amazon SES</strong> ($0.10 / 1,000 emails), <strong>Postmark</strong>, or <strong>Resend</strong>. No application code refactoring is required—only update the SMTP host and credentials:
+                </p>
+                <CodeEditor
+                  code={`// Example AWS SES SMTP Configuration
+const payload = {
+  to: "subscriber@company.com",
+  from: "notifications@yourverifieddomain.com",
+  subject: "Your Daily Digest",
+  html: "<h2>Today's Highlights</h2>",
+  smtp: {
+    host: "email-smtp.us-east-1.amazonaws.com",
+    port: 465,
+    secure: true,
+    user: "AKIAIOSFODNN7EXAMPLE",
+    pass: "BAA8f...YourSesSmtpPassword"
+  }
+};`}
+                  language="node"
+                  filename="amazon-ses-config.ts"
+                  showLineNumbers={false}
+                  copyable={true}
+                />
+              </div>
+
+              {/* Step 2: Configure SPF, DKIM & DMARC DNS */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center font-bold text-xs">
+                    2
+                  </span>
+                  <h3 className="text-base font-bold text-slate-200">Configure SPF, DKIM, and DMARC DNS Records</h3>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Major inbox providers (Gmail, Yahoo, Outlook) require strict DNS authentication to prevent emails landing in Spam. Add these three records to your domain provider (Cloudflare, Route53, Namecheap):
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-mono pt-1">
+                  <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-1">
+                    <span className="text-amber-400 font-bold">1. SPF Record (TXT)</span>
+                    <p className="text-[11px] text-slate-400 font-mono break-all">v=spf1 include:amazonses.com ~all</p>
+                    <p className="text-[10px] text-slate-500 font-sans">Authorizes the mail server IP to send on your behalf.</p>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-1">
+                    <span className="text-emerald-400 font-bold">2. DKIM Keys (CNAME)</span>
+                    <p className="text-[11px] text-slate-400 font-mono break-all">xxx._domainkey.domain.com</p>
+                    <p className="text-[10px] text-slate-500 font-sans">Cryptographically signs email headers to prevent tampering.</p>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-1">
+                    <span className="text-sky-400 font-bold">3. DMARC Policy (TXT)</span>
+                    <p className="text-[11px] text-slate-400 font-mono break-all">v=DMARC1; p=quarantine; pct=100</p>
+                    <p className="text-[10px] text-slate-500 font-sans">Instructs inboxes to reject unauthenticated spoofed senders.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3: Implement Token-Bucket Rate Limiting */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center font-bold text-xs">
+                    3
+                  </span>
+                  <h3 className="text-base font-bold text-slate-200">Enforce Token-Bucket Rate Limiting via Redis</h3>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  New ESP accounts have strict rate ceilings (e.g. Amazon SES initial sandbox permits 14 emails/second). Using an Upstash Redis token-bucket rate limiter ensures that sudden spikes in application traffic smoothly pace downstream SMTP requests without triggering HTTP 429 throttling errors.
+                </p>
+              </div>
+
+              {/* Step 4: Add Webhook Bounce & Complaint Handlers */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center font-bold text-xs">
+                    4
+                  </span>
+                  <h3 className="text-base font-bold text-slate-200">Automate Bounce &amp; Complaint Webhooks</h3>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Subscribe your application to ESP bounce and spam complaint notifications. When a recipient email permanently bounces or complains, automatically flag that address in your Supabase database as unsubscribed so future dispatches never harm your domain reputation.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* SECTION: USE CASES */}
           <section id="use-cases" className="space-y-6 border-t border-slate-800/80 pt-12 scroll-mt-24">
             <div className="inline-flex items-center gap-2 bg-rose-500/10 border border-rose-500/20 text-rose-400 px-3 py-1 rounded-full text-xs font-semibold">
               <Sparkles className="w-3.5 h-3.5" /> Real-World Use Cases

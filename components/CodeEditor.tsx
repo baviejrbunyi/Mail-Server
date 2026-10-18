@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { Copy, Check, Terminal, FileCode } from "lucide-react";
+import { copyToClipboardSafe } from "@/lib/utils";
 
 interface CodeEditorProps {
   code: string;
@@ -105,8 +106,8 @@ export function CodeEditor({
     return code.trim().split("\n");
   }, [code]);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(code);
+  const handleCopy = async () => {
+    await copyToClipboardSafe(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

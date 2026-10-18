@@ -34,6 +34,45 @@ export default function DocumentationPage() {
     if (typeof window !== "undefined" && window.location.origin) {
       setBaseUrl(window.location.origin);
     }
+
+    const sectionIds = [
+      "overview",
+      "quickstart",
+      "implementation",
+      "endpoints",
+      "use-cases",
+      "troubleshooting"
+    ];
+
+    const handleScroll = () => {
+      // 140px accounts for sticky header height (approx 70px) and top breathing room
+      const scrollPosition = window.scrollY + 140;
+
+      // If scrolled near bottom of page, highlight the last section
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = window.innerHeight;
+      if (window.scrollY + clientHeight >= scrollHeight - 80) {
+        setActiveSection(sectionIds[sectionIds.length - 1]);
+        return;
+      }
+
+      let current = sectionIds[0];
+      for (const id of sectionIds) {
+        const el = document.getElementById(id);
+        if (el) {
+          const top = el.offsetTop;
+          if (scrollPosition >= top) {
+            current = id;
+          }
+        }
+      }
+      setActiveSection(current);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const copyCode = (id: string, text: string) => {
@@ -280,20 +319,28 @@ MAIL_SERVER_API_KEY=ak_live_YOUR_GENERATED_KEY_HERE`;
                 Documentation Index
               </span>
               <nav className="space-y-1">
-                {sections.map((sec) => (
-                  <a
-                    key={sec.id}
-                    href={`#${sec.id}`}
-                    onClick={() => setActiveSection(sec.id)}
-                    className={`block px-3 py-2 text-xs rounded-lg transition-all font-medium ${
-                      activeSection === sec.id
-                        ? "bg-amber-400/10 text-amber-400 font-semibold border-l-2 border-amber-400"
-                        : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
-                    }`}
-                  >
-                    {sec.label}
-                  </a>
-                ))}
+                {sections.map((sec) => {
+                  const isActive = activeSection === sec.id;
+                  return (
+                    <a
+                      key={sec.id}
+                      href={`#${sec.id}`}
+                      onClick={() => setActiveSection(sec.id)}
+                      className={`px-3 py-2 text-xs rounded-lg transition-all font-medium border-l-2 flex items-center justify-between group ${
+                        isActive
+                          ? "bg-amber-400/10 text-amber-400 font-semibold border-amber-400 shadow-sm"
+                          : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-transparent"
+                      }`}
+                    >
+                      <span className="truncate">{sec.label}</span>
+                      {isActive ? (
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"></span>
+                      ) : (
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-700 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"></span>
+                      )}
+                    </a>
+                  );
+                })}
               </nav>
             </div>
 

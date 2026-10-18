@@ -2,17 +2,24 @@ import type {Metadata} from 'next';
 import './globals.css'; // Global styles
 
 export const metadata: Metadata = {
-  title: 'AWS Serverless Email API Server & Console',
-  description: 'High-performance serverless email delivery microservice powered by AWS Lambda, SQS, DynamoDB, and Amazon SES.',
+  title: 'Serverless Email API',
+  description: 'High-performance serverless email delivery microservice powered by Next.js, Supabase, Upstash QStash, and Nodemailer.',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    shortcut: '/favicon.svg',
+    apple: '/favicon.svg',
+  },
   openGraph: {
-    title: 'AWS Serverless Email API Server & Console',
-    description: 'High-performance serverless email delivery microservice powered by AWS Lambda, SQS, DynamoDB, and Amazon SES.',
+    title: 'Serverless Email API',
+    description: 'High-performance serverless email delivery microservice powered by Next.js, Supabase, Upstash QStash, and Nodemailer.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AWS Serverless Email API Server & Console',
-    description: 'High-performance serverless email delivery microservice powered by AWS Lambda, SQS, DynamoDB, and Amazon SES.',
+    title: 'Serverless Email API',
+    description: 'High-performance serverless email delivery microservice powered by Next.js, Supabase, Upstash QStash, and Nodemailer.',
   },
 };
 

@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import { 
   Key, 
-  Mail, 
   Send, 
   RefreshCw, 
   Copy, 
@@ -16,14 +15,12 @@ import {
   LogOut, 
   User, 
   ArrowLeft,
-  Database,
   Sparkles,
-  Terminal,
-  ExternalLink,
   BookOpen
 } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { CodeEditor } from "@/components/CodeEditor";
 
 interface ApiKeyItem {
   id: string;
@@ -487,7 +484,7 @@ export default function DashboardPage() {
             </form>
 
             <div className="relative border-t border-slate-800 pt-4 text-center">
-              <span className="text-[11px] text-slate-500">Or skip Supabase credentials setup for now:</span>
+              <span className="text-[11px] text-slate-500">Or test immediately without creating an account:</span>
               <button
                 type="button"
                 onClick={handleInstantDemoLogin}
@@ -505,7 +502,7 @@ export default function DashboardPage() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-100">API Keys</h3>
-                  <p className="text-xs text-slate-400">Authenticated with user UUID: <code className="text-amber-400 font-mono">{user.id}</code></p>
+                  <p className="text-xs text-slate-400">Authenticated with user UUID: <code className="px-1.5 py-0.5 rounded text-[11px] font-mono bg-slate-950 border border-slate-800 text-sky-300">{user.id}</code></p>
                 </div>
 
                 <form onSubmit={handleCreateApiKey} className="flex items-center gap-2">
@@ -528,20 +525,22 @@ export default function DashboardPage() {
               </div>
 
               {rawCreatedKey && (
-                <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2">
+                <div className="p-4 bg-slate-900 border border-slate-700 rounded-xl space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-amber-400">New Secret API Key Generated (Copy now, it won't be shown again!)</span>
+                    <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+                      <Check className="w-4 h-4 text-emerald-400" /> New Secret API Key Generated (Copy now, it won&apos;t be shown again!)
+                    </span>
                     <button
                       onClick={() => copyToClipboard(rawCreatedKey)}
-                      className="px-3 py-1 bg-amber-400 text-slate-950 rounded text-xs font-bold flex items-center gap-1.5 hover:bg-amber-300 transition-colors"
+                      className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded text-xs font-bold flex items-center gap-1.5 transition-colors"
                     >
                       {copiedKey ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                       {copiedKey ? "Copied!" : "Copy Key"}
                     </button>
                   </div>
-                  <pre className="p-3 bg-slate-950 rounded-lg text-xs font-mono text-amber-300 overflow-x-auto border border-amber-500/20">
+                  <div className="p-3 bg-[#0d1117] rounded-lg text-xs font-mono border border-slate-800 overflow-x-auto text-emerald-300 selection:bg-emerald-900">
                     {rawCreatedKey}
-                  </pre>
+                  </div>
                 </div>
               )}
 
@@ -585,7 +584,7 @@ export default function DashboardPage() {
                 <div className="border-b border-slate-800 pb-3 flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-semibold text-slate-100">API Playground</h3>
-                    <p className="text-xs text-slate-400">Test <code className="text-amber-400 font-mono">POST /api/v1/send</code> with live validation</p>
+                    <p className="text-xs text-slate-400">Test <code className="px-1.5 py-0.5 rounded text-[11px] font-mono bg-slate-950 border border-slate-800 text-sky-300">POST /api/v1/send</code> with live validation</p>
                   </div>
                   <span className="text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-1 rounded">202 Accepted</span>
                 </div>
@@ -677,9 +676,13 @@ export default function DashboardPage() {
                         HTTP {sendResponse.status}
                       </span>
                     </div>
-                    <pre className="p-3 bg-slate-950 rounded-lg text-xs font-mono text-amber-300 overflow-x-auto border border-slate-800">
-                      {JSON.stringify(sendResponse.data, null, 2)}
-                    </pre>
+                    <CodeEditor
+                      code={JSON.stringify(sendResponse.data, null, 2)}
+                      language="json"
+                      filename="response.json"
+                      showLineNumbers={false}
+                      copyable={true}
+                    />
                   </div>
                 )}
               </div>
@@ -705,7 +708,7 @@ export default function DashboardPage() {
                     logs.map((log) => (
                       <div key={log.message_id} className="bg-slate-950 border border-slate-800/80 rounded-xl p-4 space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-mono text-amber-400">{log.message_id}</span>
+                          <span className="text-xs font-mono text-sky-300 font-medium">{log.message_id}</span>
                           <div className="flex items-center gap-2">
                             {log.status === "queued" && (
                               <button

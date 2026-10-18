@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <rect width="32" height="32" rx="7" fill="#090d16"/>
+  <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" fill="none" stroke="#f59e0b" stroke-opacity="0.3"/>
+  <!-- Envelope Body -->
+  <rect x="5" y="8" width="22" height="16" rx="2.5" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Envelope Flap -->
+  <path d="M5.5 9.5L16 17.5L26.5 9.5" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Zap / Speed Accent in Amber -->
+  <path d="M19 5L15 11H18L14 17" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

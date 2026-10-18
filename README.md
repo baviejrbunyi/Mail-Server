@@ -10,6 +10,7 @@ Because Vercel is a serverless environment with ephemeral file systems and execu
 
 - **HTTP Ingestion (`POST /api/v1/send`)**: Validates the payload and API key, records the email as `queued` in Supabase, and publishes a job to Upstash QStash.
 - **Worker Webhook (`POST /api/internal/process-email`)**: Triggered securely by QStash, this endpoint executes the SMTP transmission via `nodemailer` and updates Supabase (`sent` or `failed`). QStash automatically handles up to 3 retries on failure.
+- **User-Provided SMTP**: To ensure maximum flexibility and multi-tenant isolation, server-side SMTP credentials have been decoupled. Users provide their own SMTP relay configuration (such as Gmail App Passwords, Mailgun, SendGrid, or Resend) either via the API payload (`smtp` object) or dynamically within the Dashboard Playground (supporting SSL on port 465 or TLS on port 587).
 
 ---
 
@@ -33,15 +34,7 @@ npm install
    - `QSTASH_TOKEN`
    - `QSTASH_CURRENT_SIGNING_KEY` (used for secure webhook signature verification).
 
-### Step 4: SMTP Relay Setup
-Choose an email provider (Mailgun, SendGrid, Resend, or Gmail App Password) to get your SMTP credentials:
-- `SMTP_HOST`: e.g., `smtp.mailgun.org` or `smtp.gmail.com`
-- `SMTP_PORT`: `587`
-- `SMTP_USER`: Your SMTP username or email address
-- `SMTP_PASSWORD`: Your SMTP password or Google App Password
-- `SMTP_FROM_DEFAULT`: Default sender address
-
-### Step 5: Configure Environment Variables
+### Step 4: Configure Environment Variables
 Create a `.env.local` file in the root directory based on `.env.example`:
 
 ```env
@@ -52,14 +45,10 @@ SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 QSTASH_TOKEN="your-qstash-token"
 QSTASH_CURRENT_SIGNING_KEY="your-qstash-signing-key"
 
-SMTP_HOST="smtp.mailgun.org"
-SMTP_PORT="587"
-SMTP_USER="postmaster@yourdomain.com"
-SMTP_PASSWORD="your-smtp-password"
-SMTP_FROM_DEFAULT="noreply@yourdomain.com"
-
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
+
+*(Note: Server-side SMTP variables have been removed. SMTP configuration is provided per request or via the playground UI).*
 
 ---
 
@@ -70,8 +59,9 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
    npm run dev
    ```
 2. Open `http://localhost:3000` in your browser.
-3. Go to the **Dashboard**, sign in with your demo email (max 3 users), and generate an API key.
-4. Test sending an email via the API Playground or cURL:
+3. Go to the **Dashboard**, sign in with your email, and generate an API key.
+4. Configure your SMTP settings (e.g. Gmail with App Password on port 465 SSL or 587 TLS) in the playground or include the `smtp` object in your API payload.
+5. Test sending an email via the API Playground or cURL:
 
 ```bash
 curl -X POST http://localhost:3000/api/v1/send \
@@ -79,9 +69,16 @@ curl -X POST http://localhost:3000/api/v1/send \
   -H "Content-Type: application/json" \
   -d '{
     "to": "recipient@example.com",
-    "from": "noreply@yourdomain.com",
+    "from": "your-gmail@gmail.com",
     "subject": "Hello from Local API",
-    "text": "Testing serverless email queue."
+    "text": "Testing serverless email queue.",
+    "smtp": {
+      "host": "smtp.gmail.com",
+      "port": 465,
+      "secure": true,
+      "user": "your-gmail@gmail.com",
+      "pass": "your-app-password"
+    }
   }'
 ```
 
@@ -91,7 +88,7 @@ curl -X POST http://localhost:3000/api/v1/send \
 
 1. Push your code to GitHub.
 2. Import the project into [Vercel](https://vercel.com/).
-3. In your Vercel Project Settings -> **Environment Variables**, add all your production credentials from `.env.local`, updating `NEXT_PUBLIC_APP_URL` to your production Vercel domain (`https://your-app.vercel.app`).
+3. In your Vercel Project Settings -> **Environment Variables**, add your Supabase and QStash credentials, updating `NEXT_PUBLIC_APP_URL` to your production Vercel domain (`https://your-app.vercel.app`).
 4. Click **Deploy**.
 
 ---

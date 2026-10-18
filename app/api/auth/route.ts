@@ -1,10 +1,71 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase, supabaseAdmin } from "@/lib/supabase";
+import { globalRegisteredUsers } from "@/lib/email-store";
 
 const isSupabaseConfigured = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   return Boolean(url && !url.includes("placeholder"));
 };
+
+// Accurately count all distinct user accounts
+async function getAccountCount(): Promise<number> {
+  const accountIds = new Set<string>();
+
+  if (isSupabaseConfigured()) {
+    // 1. Check Supabase Auth users
+    try {
+      const { data: usersList } = await supabaseAdmin.auth.admin.listUsers();
+      if (usersList?.users) {
+        for (const u of usersList.users) {
+          if (u.id) accountIds.add(u.id);
+        }
+      }
+    } catch (err) {
+      console.warn("Could not list Supabase auth users:", err);
+    }
+
+    // 2. Check distinct user_id in api_keys table (excluding system demo placeholder)
+    try {
+      const { data: keysData } = await supabaseAdmin
+        .from("api_keys")
+        .select("user_id");
+      if (keysData) {
+        for (const k of keysData) {
+          if (
+            k.user_id &&
+            k.user_id !== "00000000-0000-0000-0000-000000000001" &&
+            k.user_id !== "usr_demo_default"
+          ) {
+            accountIds.add(k.user_id);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Could not query api_keys users:", err);
+    }
+  }
+
+  // 3. Include any accounts created in session/memory
+  for (const uid of globalRegisteredUsers) {
+    if (uid && uid !== "00000000-0000-0000-0000-000000000001" && uid !== "usr_demo_default") {
+      accountIds.add(uid);
+    }
+  }
+
+  return accountIds.size;
+}
+
+export async function GET() {
+  const userCount = await getAccountCount();
+  const remaining = Math.max(0, 3 - userCount);
+
+  return NextResponse.json({
+    totalUsers: userCount,
+    remainingAccounts: remaining,
+    maxLimit: 3,
+    isLimitReached: remaining === 0,
+  });
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,9 +78,21 @@ export async function POST(req: NextRequest) {
 
     const cleanEmail = String(email).trim().toLowerCase();
 
-    // 1. If Supabase is not configured, provide clean demo fallback
+    // 1. If Supabase is not configured, provide clean demo fallback with 3-account limit
     if (!isSupabaseConfigured()) {
+      const currentCount = await getAccountCount();
+      if (action === "register" && currentCount >= 3) {
+        return NextResponse.json(
+          { error: "Registration closed: Maximum 3 accounts allowed in this project." },
+          { status: 400 }
+        );
+      }
+
       const demoId = "usr_" + cleanEmail.split("@")[0].replace(/[^a-z0-9]/g, "") + "_12345";
+      if (action === "register") {
+        globalRegisteredUsers.add(demoId);
+      }
+
       return NextResponse.json({
         success: true,
         user: { id: demoId, email: cleanEmail },
@@ -29,18 +102,13 @@ export async function POST(req: NextRequest) {
 
     // 2. Handle Registration (Sign Up)
     if (action === "register") {
-      // Check demo user count (max 3 users limit)
-      try {
-        const { data: usersList } = await supabaseAdmin.auth.admin.listUsers();
-        const existingUsers = usersList?.users || [];
-        if (existingUsers.length >= 3) {
-          return NextResponse.json(
-            { error: "Registration closed: Maximum 3 demo accounts allowed in this project." },
-            { status: 400 }
-          );
-        }
-      } catch (err) {
-        console.warn("Could not check user list limit:", err);
+      // Check account limit (strictly 3 accounts maximum)
+      const currentCount = await getAccountCount();
+      if (currentCount >= 3) {
+        return NextResponse.json(
+          { error: "Registration closed: Maximum 3 accounts allowed in this project." },
+          { status: 400 }
+        );
       }
 
       // Create user with email_confirm: true via Supabase Admin API

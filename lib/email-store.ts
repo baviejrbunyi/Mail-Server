@@ -62,3 +62,5 @@ export const globalEmailLogs: StoredEmailLog[] = [
     updated_at: new Date(Date.now() - 60000 * 15).toISOString(),
   },
 ];
+
+export const globalRegisteredUsers = new Set<string>();

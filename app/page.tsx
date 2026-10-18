@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Mail, Terminal, Shield, Zap, ArrowRight, CheckCircle2, Server, Database, Cpu } from "lucide-react";
+import { Mail, Terminal, Shield, Zap, ArrowRight, CheckCircle2, Server, Database, Cpu, BookOpen } from "lucide-react";
 
 export default function LandingPage() {
   return (
@@ -12,17 +12,24 @@ export default function LandingPage() {
           </div>
           <div>
             <h1 className="text-base font-bold tracking-tight text-slate-100">Serverless Email API</h1>
-            <p className="text-xs text-slate-400 font-mono">Next.js · Supabase · Upstash QStash · Nodemailer</p>
           </div>
         </div>
 
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-400">
           <a href="#features" className="hover:text-slate-200 transition-colors">Features</a>
-          <a href="#architecture" className="hover:text-slate-200 transition-colors">Architecture</a>
-          <a href="#endpoints" className="hover:text-slate-200 transition-colors">API Reference</a>
+          <Link href="/docs" className="hover:text-amber-400 text-slate-200 transition-colors flex items-center gap-1.5 font-semibold">
+            <BookOpen className="w-4 h-4 text-amber-400" /> Documentation
+          </Link>
+          <Link href="/dashboard" className="hover:text-slate-200 transition-colors">Console</Link>
         </nav>
 
         <div className="flex items-center gap-3">
+          <Link
+            href="/docs"
+            className="hidden sm:flex px-3.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-900 border border-slate-800 rounded-lg transition-colors items-center gap-1.5"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-amber-400" /> Docs
+          </Link>
           <Link
             href="/dashboard"
             className="px-4 py-2 text-xs font-semibold text-slate-950 bg-amber-400 rounded-lg hover:bg-amber-300 transition-colors shadow-sm flex items-center gap-2"
@@ -48,16 +55,16 @@ export default function LandingPage() {
             <div className="flex flex-wrap gap-4 pt-4">
               <Link
                 href="/dashboard"
-                className="px-6 py-3 text-xs font-semibold text-slate-950 bg-amber-400 rounded-xl hover:bg-amber-300 transition-colors flex items-center gap-2"
+                className="px-6 py-3 text-xs font-semibold text-slate-950 bg-amber-400 rounded-xl hover:bg-amber-300 transition-colors flex items-center gap-2 shadow-lg shadow-amber-500/10"
               >
                 Get Started Free <ArrowRight className="w-4 h-4" />
               </Link>
-              <a
-                href="#endpoints"
-                className="px-6 py-3 text-xs font-semibold text-slate-300 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 transition-colors"
+              <Link
+                href="/docs"
+                className="px-6 py-3 text-xs font-semibold text-slate-200 bg-slate-900 border border-slate-700/70 hover:border-amber-500/40 rounded-xl hover:bg-slate-800 transition-colors flex items-center gap-2"
               >
-                View API Docs
-              </a>
+                <BookOpen className="w-4 h-4 text-amber-400" /> Full Documentation
+              </Link>
             </div>
           </div>
 
@@ -122,35 +129,25 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Endpoints Documentation */}
-        <div id="endpoints" className="space-y-6 pt-12">
-          <h2 className="text-2xl font-bold tracking-tight text-slate-100">API Endpoints Reference</h2>
-          
-          <div className="space-y-4 font-mono text-xs">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded font-bold">POST</span>
-                <span className="text-slate-200 font-semibold">/api/v1/send</span>
-              </div>
-              <span className="text-slate-400 font-sans">Queue email for asynchronous SMTP transmission</span>
+        {/* Documentation Banner Callout */}
+        <div className="bg-gradient-to-r from-amber-500/10 via-slate-900 to-slate-900 border border-amber-500/20 rounded-2xl p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-2 text-amber-400 text-xs font-semibold uppercase tracking-wider">
+              <BookOpen className="w-4 h-4" /> Comprehensive Developer Documentation
             </div>
-
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <span className="px-2.5 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded font-bold">GET</span>
-                <span className="text-slate-200 font-semibold">/api/v1/messages</span>
-              </div>
-              <span className="text-slate-400 font-sans">List paginated historical email audit logs</span>
-            </div>
-
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <span className="px-2.5 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded font-bold">GET</span>
-                <span className="text-slate-200 font-semibold">/api/v1/messages/:id</span>
-              </div>
-              <span className="text-slate-400 font-sans">Check delivery state and error details for a message ID</span>
-            </div>
+            <h2 className="text-2xl font-bold tracking-tight text-slate-100">
+              Complete Setup, Architecture & Implementation Guide
+            </h2>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              Explore the dedicated documentation page featuring project overviews, setup tutorials for Supabase and QStash, SMTP configurations, endpoint references, and copy-paste code samples in cURL, TypeScript, Python, and Go.
+            </p>
           </div>
+          <Link
+            href="/docs"
+            className="px-6 py-3 text-xs font-semibold text-slate-950 bg-amber-400 rounded-xl hover:bg-amber-300 transition-colors shrink-0 flex items-center gap-2 shadow-lg shadow-amber-500/10"
+          >
+            Open Documentation <ArrowRight className="w-4 h-4" />
+          </Link>
         </div>
       </section>
 

@@ -19,7 +19,8 @@ import {
   Database,
   Sparkles,
   Terminal,
-  ExternalLink
+  ExternalLink,
+  BookOpen
 } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -43,14 +44,6 @@ interface EmailLogItem {
   created_at: string;
 }
 
-interface SupabaseStatus {
-  status: string;
-  connected: boolean;
-  message: string;
-  tables?: { api_keys: boolean; email_logs: boolean };
-  counts?: { api_keys: number; email_logs: number; users: number };
-}
-
 export default function DashboardPage() {
   // Auth state
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
@@ -59,12 +52,25 @@ export default function DashboardPage() {
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const [remainingAccounts, setRemainingAccounts] = useState<number>(3);
+  const [totalUsers, setTotalUsers] = useState<number>(0);
 
-  // Supabase Database Diagnostic State
-  const [dbStatus, setDbStatus] = useState<SupabaseStatus | null>(null);
-  const [isCheckingDb, setIsCheckingDb] = useState(false);
-  const [isSeedingDb, setIsSeedingDb] = useState(false);
-  const [seedSuccessMsg, setSeedSuccessMsg] = useState("");
+  const fetchAccountStats = async () => {
+    try {
+      const res = await fetch("/api/auth");
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data.remainingAccounts === "number") {
+          setRemainingAccounts(data.remainingAccounts);
+        }
+        if (typeof data.totalUsers === "number") {
+          setTotalUsers(data.totalUsers);
+        }
+      }
+    } catch (err) {
+      console.warn("Could not fetch account stats:", err);
+    }
+  };
 
   // API Keys state
   const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([]);
@@ -87,50 +93,13 @@ export default function DashboardPage() {
   const [logs, setLogs] = useState<EmailLogItem[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
 
-  // Check Supabase Health
-  const checkDbHealth = async () => {
-    setIsCheckingDb(true);
-    try {
-      const res = await fetch("/api/setup/status");
-      const data = await res.json();
-      setDbStatus(data);
-    } catch (err: any) {
-      setDbStatus({
-        status: "error",
-        connected: false,
-        message: "Could not reach status API: " + err.message,
-      });
-    } finally {
-      setIsCheckingDb(false);
-    }
-  };
-
-  // Seed Supabase with demo data
-  const handleSeedDatabase = async () => {
-    setIsSeedingDb(true);
-    setSeedSuccessMsg("");
-    try {
-      const res = await fetch("/api/setup/seed", { method: "POST" });
-      const data = await res.json();
-      if (data.success) {
-        setSeedSuccessMsg(data.message || "Database seeded successfully!");
-        checkDbHealth();
-        if (user) fetchData(user.id);
-      } else {
-        alert(data.message || "Seeding failed");
-      }
-    } catch (err: any) {
-      alert("Seeding error: " + err.message);
-    } finally {
-      setIsSeedingDb(false);
-    }
-  };
-
-  // Initialize Auth state on mount
+  // Initialize Auth state on mount & synchronize account stats
   useEffect(() => {
-    checkDbHealth();
+    // 1. Immediately fetch remaining account slots
+    fetchAccountStats();
+    const interval = setInterval(fetchAccountStats, 8000);
 
-    // 1. Check local session storage
+    // 2. Check local session storage
     const saved = localStorage.getItem("email_api_user");
     if (saved) {
       try {
@@ -142,7 +111,7 @@ export default function DashboardPage() {
       } catch {}
     }
 
-    // 2. Check Supabase Auth session if configured
+    // 3. Check Supabase Auth session if configured
     try {
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
@@ -162,8 +131,13 @@ export default function DashboardPage() {
         }
       });
 
-      return () => subscription.unsubscribe();
-    } catch {}
+      return () => {
+        subscription.unsubscribe();
+        clearInterval(interval);
+      };
+    } catch {
+      return () => clearInterval(interval);
+    }
   }, []);
 
   // Fetch API Keys & Logs for user
@@ -231,8 +205,9 @@ export default function DashboardPage() {
       if (!res.ok || !data.success) {
         setAuthMessage({
           type: "error",
-          text: data.error || "Authentication failed. If testing locally, you can also click Demo Sandbox Login.",
+          text: data.error || "Authentication failed. Please verify credentials.",
         });
+        fetchAccountStats();
       } else if (data.user) {
         const authUser = { id: data.user.id, email: data.user.email || emailInput };
         setUser(authUser);
@@ -241,10 +216,12 @@ export default function DashboardPage() {
           type: "success",
           text: data.message || "Logged in successfully!",
         });
+        fetchAccountStats();
         fetchData(data.user.id);
       }
     } catch (err: any) {
       setAuthMessage({ type: "error", text: err.message });
+      fetchAccountStats();
     } finally {
       setAuthLoading(false);
     }
@@ -258,6 +235,7 @@ export default function DashboardPage() {
     localStorage.setItem("email_api_user", JSON.stringify(demoUser));
     setSelectedKey("ak_live_demo123456789abcdef0123456789abcdef");
     fetchData(demoId);
+    fetchAccountStats();
   };
 
   const handleLogout = async () => {
@@ -268,6 +246,7 @@ export default function DashboardPage() {
     setSelectedKey("");
     setApiKeys([]);
     localStorage.removeItem("email_api_user");
+    fetchAccountStats();
   };
 
   // Create API Key
@@ -382,91 +361,48 @@ export default function DashboardPage() {
           </Link>
           <div>
             <h1 className="text-base font-bold tracking-tight text-slate-100">Serverless Email API Console</h1>
-            <p className="text-xs text-slate-400 font-mono">Supabase Auth · API Keys · SQS / QStash Relay</p>
           </div>
         </div>
 
-        {user && (
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-300 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">
-              <User className="w-3.5 h-3.5 text-amber-400" />
-              <span className="font-medium">{user.email}</span>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/docs"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-lg transition-colors"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Docs</span>
+          </Link>
+
+          {user && (
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex items-center gap-2 text-xs text-slate-300 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">
+                <User className="w-3.5 h-3.5 text-amber-400" />
+                <span className="font-medium">{user.email}</span>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="p-2 text-slate-400 hover:text-slate-100 bg-slate-900 border border-slate-800 rounded-lg transition-colors"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
-            <button
-              onClick={handleLogout}
-              className="p-2 text-slate-400 hover:text-slate-100 bg-slate-900 border border-slate-800 rounded-lg transition-colors"
-              title="Logout"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </header>
 
       {/* Main Viewport */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-6 md:p-8 space-y-6">
-        {/* Database Diagnostic & Seeder Banner */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                dbStatus?.connected && dbStatus.status === "ready" 
-                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
-                  : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-              }`}>
-                <Database className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-slate-200">Supabase Database Connection</h3>
-                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold ${
-                    dbStatus?.connected && dbStatus.status === "ready"
-                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                      : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                  }`}>
-                    {dbStatus?.connected && dbStatus.status === "ready" ? "READY" : "LOCAL / UNPOPULATED"}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400">{dbStatus?.message || "Checking database..."}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={checkDbHealth}
-                disabled={isCheckingDb}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs flex items-center gap-1.5 transition-colors"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isCheckingDb ? "animate-spin" : ""}`} /> Test Connection
-              </button>
-              <button
-                onClick={handleSeedDatabase}
-                disabled={isSeedingDb}
-                className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
-              >
-                <Sparkles className="w-3.5 h-3.5" /> {isSeedingDb ? "Seeding..." : "Seed Demo Data"}
-              </button>
-            </div>
-          </div>
-
-          {seedSuccessMsg && (
-            <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-lg flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>{seedSuccessMsg}</span>
-            </div>
-          )}
-        </div>
-
         {!user ? (
           /* AUTHENTICATION GATEWAY */
-          <div className="max-w-md mx-auto mt-8 bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6">
+          <div className="max-w-md mx-auto mt-12 bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6">
             <div className="text-center space-y-2">
               <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-2">
                 <ShieldCheck className="w-6 h-6" />
               </div>
               <h2 className="text-xl font-bold text-slate-100">Developer Authentication</h2>
               <p className="text-xs text-slate-400">
-                Sign in with Supabase Auth or use the instant demo sandbox (3 accounts max).
+                Sign in or register an account ({remainingAccounts} of 3 account slots available).
               </p>
             </div>
 
@@ -481,12 +417,22 @@ export default function DashboardPage() {
                 Sign In
               </button>
               <button
-                onClick={() => { setAuthMode("signup"); setAuthMessage(null); }}
+                onClick={() => {
+                  if (remainingAccounts > 0) {
+                    setAuthMode("signup");
+                    setAuthMessage(null);
+                  }
+                }}
+                disabled={remainingAccounts <= 0}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                  authMode === "signup" ? "bg-amber-400 text-slate-950" : "text-slate-400 hover:text-slate-200"
+                  remainingAccounts <= 0
+                    ? "opacity-50 cursor-not-allowed text-slate-500"
+                    : authMode === "signup"
+                    ? "bg-amber-400 text-slate-950"
+                    : "text-slate-400 hover:text-slate-200"
                 }`}
               >
-                Create Account (Max 3)
+                Create Account (Max {remainingAccounts})
               </button>
             </div>
 
@@ -528,11 +474,15 @@ export default function DashboardPage() {
 
               <button
                 type="submit"
-                disabled={authLoading}
+                disabled={authLoading || (authMode === "signup" && remainingAccounts <= 0)}
                 className="w-full py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {authLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
-                {authMode === "signin" ? "Sign In to Dashboard" : "Register Account"}
+                {authMode === "signin"
+                  ? "Sign In to Dashboard"
+                  : remainingAccounts <= 0
+                  ? "Account Limit Reached (3/3)"
+                  : `Register Account (${remainingAccounts} slot${remainingAccounts === 1 ? "" : "s"} left)`}
               </button>
             </form>
 

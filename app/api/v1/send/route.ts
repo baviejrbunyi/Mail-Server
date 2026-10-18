@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateApiKey } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { globalEmailLogs, StoredEmailLog } from "@/lib/email-store";
+import { deliverEmail } from "@/lib/email-sender";
 import { Client } from "@upstash/qstash";
 import crypto from "crypto";
 
@@ -147,40 +148,73 @@ export async function POST(req: NextRequest) {
     updated_at: now,
   };
 
-  // Immediate in-memory mirror for real-time UI responsiveness
+  // Immediate in-memory mirror for local UI responsiveness
   globalEmailLogs.unshift(emailRecord);
 
-  // 3. Save to Supabase (email_logs table) if configured
+  // 3. Save to Supabase (email_logs table)
   if (isSupabaseConfigured()) {
     try {
-      const { error: dbError } = await supabaseAdmin.from("email_logs").insert({
+      // Determine if auth.userId is a standard UUID or string
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const safeUserId = auth.userId && UUID_REGEX.test(auth.userId) ? auth.userId : null;
+
+      const recordToInsert: any = {
         message_id: messageId,
-        user_id: auth.userId,
-        client_id: auth.clientId,
+        client_id: auth.clientId || "default",
         recipient: emailRecord.recipient,
         sender: emailRecord.sender,
         subject: emailRecord.subject,
-        text_body: payload.text,
-        html_body: payload.html,
         status: "queued",
         retry_count: 0,
         created_at: now,
         updated_at: now,
-      });
+      };
+
+      // Only pass user_id if valid UUID (or if table user_id is TEXT)
+      if (safeUserId) {
+        recordToInsert.user_id = safeUserId;
+      }
+
+      // Try inserting with optional body columns
+      recordToInsert.text_body = payload.text;
+      recordToInsert.html_body = payload.html;
+
+      const { error: dbError } = await supabaseAdmin.from("email_logs").insert(recordToInsert);
 
       if (dbError) {
-        console.warn("Supabase record warning:", dbError.message);
+        console.warn("[Supabase] Full insert warning:", dbError.message);
+        // Fallback retry without text_body/html_body in case table has legacy schema
+        const fallbackRecord = {
+          message_id: messageId,
+          recipient: emailRecord.recipient,
+          sender: emailRecord.sender,
+          subject: emailRecord.subject,
+          status: "queued",
+          retry_count: 0,
+          created_at: now,
+          updated_at: now,
+        };
+        await supabaseAdmin.from("email_logs").insert(fallbackRecord).then(({ error }) => {
+          if (error) console.error("[Supabase Fallback Insert Error]:", error.message);
+          else console.log("[Supabase] Fallback insert succeeded for message:", messageId);
+        });
+      } else {
+        console.log(`[Supabase] Successfully saved email_log for message ${messageId}`);
       }
     } catch (dbErr: any) {
-      console.warn("Supabase insert exception:", dbErr.message);
+      console.error("[Supabase Exception]:", dbErr.message);
     }
   }
 
-  // 4. Publish Job to Upstash QStash (or trigger async simulator if local)
-  if (isQStashConfigured()) {
+  // 4. Background Delivery Execution (Decoupled & Non-blocking)
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  const isLocalhost = !appUrl || appUrl.includes("localhost") || appUrl.includes("127.0.0.1") || appUrl.includes("placeholder");
+
+  if (isQStashConfigured() && !isLocalhost) {
+    // Production on Vercel with public HTTPS URL -> Publish to Upstash QStash
     try {
       const qstash = new Client({ token: process.env.QSTASH_TOKEN! });
-      const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://your-vercel-app.vercel.app"}/api/internal/process-email`;
+      const webhookUrl = `${appUrl}/api/internal/process-email`;
       
       await qstash.publishJSON({
         url: webhookUrl,
@@ -197,26 +231,29 @@ export async function POST(req: NextRequest) {
         },
         retries: 3,
       });
+      console.log(`[QStash] Published email job ${messageId} to ${webhookUrl}`);
     } catch (qErr: any) {
-      console.warn("QStash publishing warning:", qErr.message);
+      console.warn("[QStash] Publish failed, falling back to direct delivery:", qErr.message);
+      deliverEmail(messageId, payload).catch((err) => console.error("[Direct Delivery Error]:", err));
     }
   } else {
-    // Local / development background worker simulation
+    // Local development or localhost:
+    // QStash cannot reach localhost:3000 from the cloud, so execute delivery asynchronously
+    // 1 second later to deliver via Nodemailer and transition status to 'sent'!
+    console.log(`[Local Mode] Triggering asynchronous delivery for ${messageId}`);
     setTimeout(() => {
-      const found = globalEmailLogs.find((m) => m.message_id === messageId);
-      if (found && found.status === "queued") {
-        found.status = "sent";
-        found.updated_at = new Date().toISOString();
-      }
-    }, 2500);
+      deliverEmail(messageId, payload).catch((err) => {
+        console.error("[Local Delivery Error]:", err);
+      });
+    }, 1000);
   }
 
-  // 5. Non-blocking 202 Accepted response with unique message ID
+  // 5. Non-blocking 202 Accepted response
   return NextResponse.json(
     {
       status: "accepted",
       messageId,
-      message: "Email queued successfully for delivery.",
+      message: "Email accepted and queued for delivery.",
       recipients: emailRecord.recipient,
       queuedAt: now,
     },

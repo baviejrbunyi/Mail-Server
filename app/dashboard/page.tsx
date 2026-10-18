@@ -348,13 +348,39 @@ export default function DashboardPage() {
       setSendResponse({ status: res.status, data });
 
       if (res.ok) {
-        // Refresh logs immediately
+        // Refresh logs immediately (shows queued)
         if (user?.id) fetchData(user.id);
+        // Refresh again after background worker delivers (shows sent)
+        setTimeout(() => {
+          if (user?.id) fetchData(user.id);
+        }, 1800);
+        setTimeout(() => {
+          if (user?.id) fetchData(user.id);
+        }, 3500);
       }
     } catch (err: any) {
       setSendResponse({ status: 500, data: { error: err.message } });
     } finally {
       setIsSending(false);
+    }
+  };
+
+  // Manually trigger delivery for a queued message
+  const handleTriggerDelivery = async (messageId: string) => {
+    try {
+      const activeAuth = selectedKey || "ak_live_demo123456789abcdef0123456789abcdef";
+      const res = await fetch(`/api/v1/messages/${messageId}/process`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${activeAuth}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (user?.id) fetchData(user.id);
+      } else {
+        alert(data.error || "Delivery trigger failed");
+      }
+    } catch (err: any) {
+      alert("Trigger error: " + err.message);
     }
   };
 
@@ -748,22 +774,38 @@ export default function DashboardPage() {
                       <div key={log.message_id} className="bg-slate-950 border border-slate-800/80 rounded-xl p-4 space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-mono text-amber-400">{log.message_id}</span>
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold font-mono ${
-                              log.status === "sent"
-                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                                : log.status === "queued"
-                                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse"
-                                : "bg-red-500/10 text-red-400 border border-red-500/20"
-                            }`}
-                          >
-                            {log.status === "sent" && <CheckCircle2 className="w-3 h-3" />}
-                            {log.status === "queued" && <Clock className="w-3 h-3" />}
-                            {log.status === "failed" && <AlertCircle className="w-3 h-3" />}
-                            {log.status}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {log.status === "queued" && (
+                              <button
+                                onClick={() => handleTriggerDelivery(log.message_id)}
+                                className="px-2 py-0.5 bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/30 rounded text-[10px] font-semibold transition-colors flex items-center gap-1"
+                                title="Run delivery worker immediately"
+                              >
+                                <Send className="w-2.5 h-2.5" /> Deliver Now
+                              </button>
+                            )}
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold font-mono ${
+                                log.status === "sent"
+                                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                  : log.status === "queued"
+                                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse"
+                                  : "bg-red-500/10 text-red-400 border border-red-500/20"
+                              }`}
+                            >
+                              {log.status === "sent" && <CheckCircle2 className="w-3 h-3" />}
+                              {log.status === "queued" && <Clock className="w-3 h-3" />}
+                              {log.status === "failed" && <AlertCircle className="w-3 h-3" />}
+                              {log.status}
+                            </span>
+                          </div>
                         </div>
                         <div className="text-xs text-slate-300 font-medium truncate">{log.subject}</div>
+                        {log.error_msg && (
+                          <div className="text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 p-2 rounded font-mono">
+                            Error: {log.error_msg}
+                          </div>
+                        )}
                         <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
                           <span>To: {Array.isArray(log.recipient) ? log.recipient.join(", ") : log.recipient}</span>
                           <span>{new Date(log.created_at).toLocaleTimeString()}</span>
